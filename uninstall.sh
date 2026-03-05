@@ -20,6 +20,9 @@ F2B_ACTIONS=(
    /etc/fail2ban/action.d/csf-domain.conf
    /etc/fail2ban/scripts/csf-ban.sh
 )
+F2B_FAIL2BAN_D=(
+   /etc/fail2ban/fail2ban.d/loglevel-verbose.conf
+)
 PURGE=false
 
 # Parse args
@@ -53,7 +56,7 @@ fi
 # 2. Remove deployed config
 echo "[2/4] Removing config..."
 removed=0
-for f in "${F2B_FILTERS[@]}" "${F2B_JAILS[@]}" "${F2B_ACTIONS[@]}"; do
+for f in "${F2B_FILTERS[@]}" "${F2B_JAILS[@]}" "${F2B_ACTIONS[@]}" "${F2B_FAIL2BAN_D[@]}"; do
    if [[ -f "$f" ]]; then
       rm -f "$f"
       echo "      Removed: $f"

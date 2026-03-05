@@ -53,6 +53,7 @@ dnf install fail2ban fail2ban-systemd -y
 cp /root/fail2ban/filter.d/*.conf /etc/fail2ban/filter.d/
 cp /root/fail2ban/jail.d/*.conf /etc/fail2ban/jail.d/
 cp /root/fail2ban/action.d/csf-domain.conf /etc/fail2ban/action.d/
+cp /root/fail2ban/fail2ban.d/loglevel-verbose.conf /etc/fail2ban/fail2ban.d/
 mkdir -p /etc/fail2ban/scripts
 cp /root/fail2ban/scripts/csf-ban.sh /etc/fail2ban/scripts/ && chmod +x /etc/fail2ban/scripts/csf-ban.sh
 
@@ -113,6 +114,7 @@ Attacker → Internet → Server
 | jail.d/apache-high-volume.conf | High-volume ban rules (500/hour, 1hr ban) |
 | action.d/csf-domain.conf | Custom CSF action (jail + domain in comment) |
 | scripts/csf-ban.sh | Helper: adds IP to csf.deny with affected domain(s) (deployed to /etc/fail2ban/scripts/) |
+| fail2ban.d/loglevel-verbose.conf | Optional: DEBUG loglevel for IP monitoring (failures, bans) in /var/log/fail2ban.log |
 | whitelist-ips.conf | Whitelisted IPs (excluded from bans) – edit and run update-whitelist.sh |
 
 ### Whitelist IPs
@@ -161,12 +163,18 @@ fail2ban-client get apache-high-volume banip
 # Unban an IP
 fail2ban-client set wordpress-wp-login unbanip <IP_ADDRESS>
 
-# Monitor fail2ban log
+# Monitor fail2ban log (with loglevel-verbose.conf shows IP failures, bans)
 tail -f /var/log/fail2ban.log
 
 # Verify domlog path exists
 ls /usr/local/apache/domlogs/*/* | head -5
 ```
+
+With `loglevel = DEBUG` (from `fail2ban.d/loglevel-verbose.conf`), you'll see:
+- `Found <ip>` – each failure counted for an IP
+- `Ban <ip>` – IP banned
+- `Unban <ip>` – IP unbanned
+To reduce log volume, remove `/etc/fail2ban/fail2ban.d/loglevel-verbose.conf` and restart fail2ban.
 
 ---
 

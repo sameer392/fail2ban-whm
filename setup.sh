@@ -28,6 +28,7 @@ echo "[1/2] Deploying config to /etc/fail2ban/..."
 cp -f "$CONFIG_DIR/filter.d/"*.conf /etc/fail2ban/filter.d/
 cp -f "$CONFIG_DIR/jail.d/"*.conf /etc/fail2ban/jail.d/
 [ -f "$CONFIG_DIR/action.d/csf-domain.conf" ] && cp -f "$CONFIG_DIR/action.d/csf-domain.conf" /etc/fail2ban/action.d/
+[ -f "$CONFIG_DIR/fail2ban.d/loglevel-verbose.conf" ] && cp -f "$CONFIG_DIR/fail2ban.d/loglevel-verbose.conf" /etc/fail2ban/fail2ban.d/
 mkdir -p /etc/fail2ban/scripts
 [ -f "$CONFIG_DIR/scripts/csf-ban.sh" ] && cp -f "$CONFIG_DIR/scripts/csf-ban.sh" /etc/fail2ban/scripts/ && chmod +x /etc/fail2ban/scripts/csf-ban.sh
 echo "      Config deployed."
