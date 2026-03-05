@@ -98,6 +98,36 @@ function get_ban_times($jail) {
     return $times;
 }
 
+function get_jail_settings($jail) {
+    $jail = preg_replace('/[^a-zA-Z0-9_-]/', '', $jail);
+    $paths = ['/usr/share/fail2ban/jail.d/' . $jail . '.conf', '/etc/fail2ban/jail.d/' . $jail . '.conf'];
+    foreach ($paths as $p) {
+        if (!is_readable($p)) continue;
+        $text = file_get_contents($p);
+        if (preg_match('/maxretry\s*=\s*(\d+)/', $text, $m1) && preg_match('/findtime\s*=\s*(\d+)/', $text, $m2) && preg_match('/bantime\s*=\s*(\d+)/', $text, $m3)) {
+            return ['maxretry' => (int)$m1[1], 'findtime' => (int)$m2[1], 'bantime' => (int)$m3[1]];
+        }
+    }
+    return ['maxretry' => 5, 'findtime' => 300, 'bantime' => 3600];
+}
+
+function save_jail_settings($jail, $maxretry, $findtime, $bantime) {
+    $jail = preg_replace('/[^a-zA-Z0-9_-]/', '', $jail);
+    $maxretry = max(1, min(10000, (int)$maxretry));
+    $findtime = max(60, min(86400 * 30, (int)$findtime));
+    $bantime = max(60, min(86400 * 365, (int)$bantime));
+    $path = '/usr/share/fail2ban/jail.d/' . $jail . '.conf';
+    if (!file_exists($path) || !is_writable($path)) {
+        $path = '/etc/fail2ban/jail.d/' . $jail . '.conf';
+    }
+    if (!is_readable($path) || !is_writable($path)) return false;
+    $content = file_get_contents($path);
+    $content = preg_replace('/^maxretry\s*=\s*\d+/m', 'maxretry = ' . $maxretry, $content);
+    $content = preg_replace('/^findtime\s*=\s*\d+/m', 'findtime = ' . $findtime, $content);
+    $content = preg_replace('/^bantime\s*=\s*\d+/m', 'bantime = ' . $bantime, $content);
+    return file_put_contents($path, $content) !== false;
+}
+
 function parse_jail_status($jail) {
     $data = ['active' => false, 'currently_failed' => '-', 'total_failed' => '-', 'currently_banned' => '-', 'total_banned' => '-', 'banned_ips' => []];
     exec("fail2ban-client status " . escapeshellarg($jail) . " 2>/dev/null", $out, $ret);
@@ -189,6 +219,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action) {
             }
         }
         $msg = $unbanned > 0 ? "Unbanned $unbanned IP(s) from whitelisted countries." : "No banned IPs found from whitelisted countries.";
+    } elseif ($action === 'save_jail_settings') {
+        $jail = preg_replace('/[^a-zA-Z0-9_-]/', '', $_POST['jail'] ?? '');
+        if (in_array($jail, ['wordpress-wp-login', 'apache-high-volume'])) {
+            $maxretry = (int)($_POST['maxretry'] ?? 5);
+            $findtime = (int)($_POST['findtime'] ?? 300);
+            $bantime = (int)($_POST['bantime'] ?? 3600);
+            if (save_jail_settings($jail, $maxretry, $findtime, $bantime)) {
+                exec('/usr/share/fail2ban/setup.sh 2>&1', $out, $ret);
+                $msg = $ret === 0 ? "Jail settings saved and fail2ban restarted." : "Settings saved; deploy failed: " . implode("\n", $out);
+            } else {
+                $msg = "Could not write jail config.";
+            }
+        } else {
+            $msg = "Invalid jail.";
+        }
     }
 }
 
@@ -214,8 +259,10 @@ $jail_labels = [
     'apache-high-volume' => ['failed' => 'Requests in window', 'failed_total' => 'Total requests']
 ];
 $jail_data = [];
+$jail_settings = [];
 foreach ($jails as $j) {
     $jail_data[$j] = parse_jail_status($j);
+    $jail_settings[$j] = get_jail_settings($j);
 }
 
 // AJAX handler must run BEFORE WHM::header() so we don't output the full page wrapper
@@ -281,6 +328,7 @@ if ($home_url === '//' || $home_url === './') $home_url = '../../';
 <h3>Jails</h3>
 <?php foreach ($jails as $j):
 $d = $jail_data[$j];
+$js = $jail_settings[$j] ?? ['maxretry' => 5, 'findtime' => 300, 'bantime' => 3600];
 ?>
 <div class="panel panel-default">
   <div class="panel-heading"><?php echo htmlspecialchars($j); ?></div>
@@ -297,6 +345,19 @@ $d = $jail_data[$j];
         <tr><td>Total banned</td><td><?php echo htmlspecialchars($d['total_banned']); ?></td></tr>
       </tbody>
     </table>
+    <form method="post" class="form-inline" style="margin-bottom:12px;padding:8px;background:#f9f9f9;border-radius:4px;">
+      <input type="hidden" name="action" value="save_jail_settings">
+      <input type="hidden" name="jail" value="<?php echo htmlspecialchars($j); ?>">
+      <label>maxretry</label>
+      <input type="number" name="maxretry" value="<?php echo (int)$js['maxretry']; ?>" min="1" max="10000" class="form-control input-sm" style="width:70px;margin:0 8px 0 4px;" title="Max attempts before ban">
+      <label style="margin-left:8px;">findtime</label>
+      <input type="number" name="findtime" value="<?php echo (int)$js['findtime']; ?>" min="60" max="2592000" class="form-control input-sm" style="width:80px;margin:0 4px 0 4px;" title="Window in seconds (e.g. 300=5min)">
+      <span class="text-muted" style="font-size:11px;">sec</span>
+      <label style="margin-left:8px;">bantime</label>
+      <input type="number" name="bantime" value="<?php echo (int)$js['bantime']; ?>" min="60" max="31536000" class="form-control input-sm" style="width:80px;margin:0 4px 0 4px;" title="Ban duration in seconds (e.g. 3600=1hr)">
+      <span class="text-muted" style="font-size:11px;">sec</span>
+      <button type="submit" class="btn btn-primary btn-sm" style="margin-left:8px;">Save &amp; Deploy</button>
+    </form>
     <p><strong>Banned IPs:</strong>
       <button type="button" class="btn btn-link reload-banned-ips" data-jail="<?php echo htmlspecialchars($j); ?>" title="Refresh table" style="margin-left:6px;padding:0 4px;vertical-align:middle;"><span class="glyphicon glyphicon-refresh"></span></button>
     </p>
