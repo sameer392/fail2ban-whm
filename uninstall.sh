@@ -19,6 +19,7 @@ F2B_JAILS=(
 F2B_ACTIONS=(
    /etc/fail2ban/action.d/csf-domain.conf
    /etc/fail2ban/scripts/csf-ban.sh
+   /etc/fail2ban/scripts/ignore-countries.conf
 )
 F2B_FAIL2BAN_D=(
    /etc/fail2ban/fail2ban.d/loglevel-verbose.conf

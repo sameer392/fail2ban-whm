@@ -1,15 +1,48 @@
 #!/bin/bash
 # Fail2Ban CSF ban helper - adds IP to csf.deny with jail name and affected domain(s)
+# Skips banning IPs from whitelisted countries (see ignore-countries.conf)
 # Usage: csf-ban.sh <ip> <jail_name>
-# Comment format: Fail2Ban <jail> <domain1, domain2, ...>
+# Comment format: Fail2Ban <jail> - <domain1, domain2, ...>
 
 IP="$1"
 JAIL="$2"
+SCRIPT_DIR="$(dirname "$0")"
+CONFIG="${SCRIPT_DIR}/ignore-countries.conf"
 DOMLOGS="${DOMLOGS:-/usr/local/apache/domlogs}"
 
 [ -z "$IP" ] || [ -z "$JAIL" ] && exit 1
 
-# Find domains that had traffic from this IP (files containing this IP in recent logs)
+# Skip private/local IPs
+[[ "$IP" =~ ^(127\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.) ]] && exit 0
+[[ "$IP" =~ ^(::1|fc00:|fe80:) ]] && exit 0
+
+# Load ignored countries
+WHITELIST_COUNTRIES=""
+[ -f "$CONFIG" ] && . "$CONFIG"
+
+# Check country and skip if whitelisted
+if [ -n "$WHITELIST_COUNTRIES" ]; then
+    COUNTRY=""
+    # IP2Location LITE DB1 (country lookup via mmdblookup)
+    for db in /usr/share/GeoIP/IP2LOCATION-LITE-DB1.mmdb; do
+        if [ -f "$db" ] && command -v mmdblookup &>/dev/null; then
+            COUNTRY=$(mmdblookup -f "$db" -i "$IP" country iso_code 2>/dev/null | awk -F'"' '/iso_code/ {print $2}')
+            [ -n "$COUNTRY" ] && break
+        fi
+    done
+    # Fallback: ip-api.com (free, no key, ~45 req/min limit)
+    if [ -z "$COUNTRY" ] && command -v curl &>/dev/null; then
+        COUNTRY=$(curl -s --connect-timeout 2 --max-time 4 "http://ip-api.com/json/${IP}?fields=countryCode" 2>/dev/null | grep -o '"countryCode":"[A-Z]*"' | cut -d'"' -f4)
+    fi
+    if [ -n "$COUNTRY" ]; then
+        for c in $(echo "$WHITELIST_COUNTRIES" | tr ',' ' '); do
+            c=$(echo "$c" | tr -d ' ')
+            [ "$COUNTRY" = "$c" ] && exit 0
+        done
+    fi
+fi
+
+# Find domains that had traffic from this IP
 DOMAINS=""
 if [ -d "$DOMLOGS" ]; then
     DOMAINS=$(grep -lE "^${IP} " "$DOMLOGS"/*/* 2>/dev/null | while read -r f; do
@@ -17,13 +50,12 @@ if [ -d "$DOMLOGS" ]; then
     done | sort -u | tr '\n' ',' | sed 's/,$//; s/,/, /g')
 fi
 
-# Build comment: Fail2Ban <jail> [domain1, domain2]
+# Build comment
 if [ -n "$DOMAINS" ]; then
     COMMENT="Fail2Ban ${JAIL} - ${DOMAINS}"
 else
     COMMENT="Fail2Ban ${JAIL}"
 fi
 
-# Add to CSF (limit comment length for csf.deny)
 COMMENT=$(echo "$COMMENT" | head -c 200)
 /usr/sbin/csf -d "$IP" "$COMMENT"

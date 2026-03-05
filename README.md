@@ -56,8 +56,12 @@ cp /root/fail2ban/action.d/csf-domain.conf /etc/fail2ban/action.d/
 cp /root/fail2ban/fail2ban.d/loglevel-verbose.conf /etc/fail2ban/fail2ban.d/
 mkdir -p /etc/fail2ban/scripts
 cp /root/fail2ban/scripts/csf-ban.sh /etc/fail2ban/scripts/ && chmod +x /etc/fail2ban/scripts/csf-ban.sh
+cp /root/fail2ban/scripts/ignore-countries.conf /etc/fail2ban/scripts/
+cp /root/fail2ban/scripts/setup-ip2location.sh /etc/fail2ban/scripts/ && chmod +x /etc/fail2ban/scripts/setup-ip2location.sh
+cp /root/fail2ban/scripts/update-ip2location.sh /etc/fail2ban/scripts/ && chmod +x /etc/fail2ban/scripts/update-ip2location.sh
 
-# Enable and start
+# Setup IP2Location (country lookup), then enable and start
+/root/fail2ban/scripts/setup-ip2location.sh
 systemctl enable fail2ban
 systemctl start fail2ban
 systemctl restart fail2ban
@@ -113,7 +117,10 @@ Attacker → Internet → Server
 | jail.d/wordpress-wp-login.conf | wp-login ban rules |
 | jail.d/apache-high-volume.conf | High-volume ban rules (100/10min, 1hr ban) |
 | action.d/csf-domain.conf | Custom CSF action (jail + domain in comment) |
-| scripts/csf-ban.sh | Helper: adds IP to csf.deny with affected domain(s) (deployed to /etc/fail2ban/scripts/) |
+| scripts/csf-ban.sh | Helper: adds IP to csf.deny; skips whitelisted countries (India, etc.) |
+| scripts/ignore-countries.conf | Countries to exclude from bans (e.g. IN=India) |
+| scripts/setup-ip2location.sh | One-time setup: download IP2Location LITE DB1, install libmaxminddb |
+| scripts/update-ip2location.sh | Cron script: weekly DB update (add 0 3 * * 3) |
 | fail2ban.d/loglevel-verbose.conf | Optional: DEBUG loglevel for IP monitoring (failures, bans) in /var/log/fail2ban.log |
 | whitelist-ips.conf | Whitelisted IPs (excluded from bans) – edit and run update-whitelist.sh |
 
@@ -132,6 +139,20 @@ To exclude trusted IPs from bans (wp-login and high-volume jails):
 3. Run `./setup.sh` – deploy and restart fail2ban
 
 Supported: single IPs, /24, /28, /29, /32. Other CIDRs fall back to single-IP match.
+
+---
+
+### Ignore countries (e.g. India)
+
+IPs from certain countries are not banned. Edit `scripts/ignore-countries.conf`:
+
+```ini
+WHITELIST_COUNTRIES=IN
+```
+
+- **IN** = India. Add more: `IN,US,GB` (comma-separated ISO codes).
+- **Country lookup:** IP2Location LITE DB1 (recommended) or ip-api.com (fallback, ~45 req/min).
+- **Setup IP2Location:** `./scripts/setup-ip2location.sh` (one-time; adds weekly cron for DB updates).
 
 ---
 
@@ -182,7 +203,7 @@ To reduce log volume, remove `/etc/fail2ban/fail2ban.d/loglevel-verbose.conf` an
 
 | Script        | Purpose                                                        |
 |---------------|----------------------------------------------------------------|
-| `install.sh`  | Full install: install package + deploy config + enable         |
+| `install.sh`  | Full install: install package + deploy config + IP2Location + enable |
 | `setup.sh`    | Deploy config only, restart fail2ban                           |
 | `status.sh`         | Show fail2ban and jail status                                  |
 | `update-whitelist.sh` | Regenerate filters from whitelist-ips.conf after adding IPs   |

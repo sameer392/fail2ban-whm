@@ -22,7 +22,7 @@ echo
 
 # 1. Install fail2ban if not installed
 if ! rpm -q fail2ban-server &>/dev/null; then
-   echo "[1/5] Installing fail2ban..."
+   echo "[1/6] Installing fail2ban..."
    if command -v dnf &>/dev/null; then
       dnf install -y fail2ban fail2ban-systemd
    elif command -v yum &>/dev/null; then
@@ -33,21 +33,32 @@ if ! rpm -q fail2ban-server &>/dev/null; then
    fi
    echo "      fail2ban installed."
 else
-   echo "[1/5] fail2ban already installed."
+   echo "[1/6] fail2ban already installed."
 fi
 
 # 2. Deploy config
-echo "[2/5] Deploying config to /etc/fail2ban/..."
+echo "[2/6] Deploying config to /etc/fail2ban/..."
 cp -f "$CONFIG_DIR/filter.d/"*.conf /etc/fail2ban/filter.d/
 cp -f "$CONFIG_DIR/jail.d/"*.conf /etc/fail2ban/jail.d/
 [ -f "$CONFIG_DIR/action.d/csf-domain.conf" ] && cp -f "$CONFIG_DIR/action.d/csf-domain.conf" /etc/fail2ban/action.d/
 [ -f "$CONFIG_DIR/fail2ban.d/loglevel-verbose.conf" ] && cp -f "$CONFIG_DIR/fail2ban.d/loglevel-verbose.conf" /etc/fail2ban/fail2ban.d/
 mkdir -p /etc/fail2ban/scripts
 [ -f "$CONFIG_DIR/scripts/csf-ban.sh" ] && cp -f "$CONFIG_DIR/scripts/csf-ban.sh" /etc/fail2ban/scripts/ && chmod +x /etc/fail2ban/scripts/csf-ban.sh
+[ -f "$CONFIG_DIR/scripts/ignore-countries.conf" ] && cp -f "$CONFIG_DIR/scripts/ignore-countries.conf" /etc/fail2ban/scripts/
+[ -f "$CONFIG_DIR/scripts/setup-ip2location.sh" ] && cp -f "$CONFIG_DIR/scripts/setup-ip2location.sh" /etc/fail2ban/scripts/ && chmod +x /etc/fail2ban/scripts/setup-ip2location.sh
+[ -f "$CONFIG_DIR/scripts/update-ip2location.sh" ] && cp -f "$CONFIG_DIR/scripts/update-ip2location.sh" /etc/fail2ban/scripts/ && chmod +x /etc/fail2ban/scripts/update-ip2location.sh
 echo "      Config deployed."
 
-# 3. Verify domlog path (informational)
-echo "[3/5] Verifying domlog path..."
+# 3. Setup IP2Location (country lookup for ignore-countries)
+echo "[3/6] Setting up IP2Location LITE DB1..."
+if [ -f "$CONFIG_DIR/scripts/setup-ip2location.sh" ]; then
+   "$CONFIG_DIR/scripts/setup-ip2location.sh" || echo "      IP2Location setup skipped or failed; ip-api.com fallback will be used."
+else
+   echo "      setup-ip2location.sh not found; run manually if needed."
+fi
+
+# 4. Verify domlog path (informational)
+echo "[4/6] Verifying domlog path..."
 if ls /usr/local/apache/domlogs/*/* &>/dev/null 2>&1; then
    echo "      Domlog path OK: /usr/local/apache/domlogs/*/*"
 else
@@ -55,16 +66,16 @@ else
    echo "      Run: ls /usr/local/apache/domlogs/*/*"
 fi
 
-# 4. Enable and start
-echo "[4/5] Enabling and starting fail2ban..."
+# 5. Enable and start
+echo "[5/6] Enabling and starting fail2ban..."
 systemctl enable fail2ban
 systemctl restart fail2ban
 # Wait for socket to be ready (avoids "Failed to access socket" race on fresh start)
 sleep 3
 echo "      fail2ban enabled and restarted."
 
-# 5. Status
-echo "[5/5] Status:"
+# 6. Status
+echo "[6/6] Status:"
 echo
 fail2ban-client status
 echo
