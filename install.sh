@@ -54,8 +54,9 @@ fi
 # 4. Enable and start
 echo "[4/5] Enabling and starting fail2ban..."
 systemctl enable fail2ban
-systemctl start fail2ban
 systemctl restart fail2ban
+# Wait for socket to be ready (avoids "Failed to access socket" race on fresh start)
+sleep 3
 echo "      fail2ban enabled and restarted."
 
 # 5. Status
