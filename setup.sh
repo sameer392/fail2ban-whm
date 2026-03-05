@@ -7,7 +7,9 @@
 
 set -e
 
-CONFIG_DIR="/root/fail2ban"
+INSTALL_DIR="/usr/share/fail2ban-custom"
+[ -d "$INSTALL_DIR" ] || INSTALL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CONFIG_DIR="$INSTALL_DIR"
 
 # Check root
 if [[ $EUID -ne 0 ]]; then
@@ -17,9 +19,10 @@ fi
 
 # Check fail2ban is installed
 if ! rpm -q fail2ban-server &>/dev/null; then
-   echo "fail2ban is not installed. Run ./install.sh for full installation." >&2
+   echo "fail2ban is not installed. Run $INSTALL_DIR/install.sh for full installation." >&2
    exit 1
 fi
+[ -d "$CONFIG_DIR" ] || { echo "Source not found. Run install.sh first." >&2; exit 1; }
 
 echo "=== Fail2Ban WordPress wp-login - Setup (config deploy) ==="
 echo

@@ -39,6 +39,9 @@ if [ -n "$WHITELIST_COUNTRIES" ]; then
             c=$(echo "$c" | tr -d ' ')
             [ "$COUNTRY" = "$c" ] && exit 0
         done
+    else
+        # Country lookup failed - skip ban to avoid blocking whitelisted countries
+        exit 0
     fi
 fi
 

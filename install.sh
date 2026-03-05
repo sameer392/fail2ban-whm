@@ -7,9 +7,8 @@
 
 set -e
 
-CONFIG_DIR="/root/fail2ban"
-F2B_FILTER="/etc/fail2ban/filter.d/wordpress-wp-login.conf"
-F2B_JAIL="/etc/fail2ban/jail.d/wordpress-wp-login.conf"
+INSTALL_DIR="/usr/share/fail2ban-custom"
+SCRIPT_SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Check root
 if [[ $EUID -ne 0 ]]; then
@@ -20,9 +19,23 @@ fi
 echo "=== Fail2Ban WordPress wp-login - Full Installation ==="
 echo
 
+# 0. Install source to permanent location (so /root/fail2ban can be removed after)
+if [ "$SCRIPT_SRC" != "$INSTALL_DIR" ]; then
+   echo "[0/7] Installing to $INSTALL_DIR..."
+   mkdir -p "$INSTALL_DIR"
+   for d in filter.d jail.d action.d fail2ban.d scripts; do
+      [ -d "$SCRIPT_SRC/$d" ] && cp -r "$SCRIPT_SRC/$d" "$INSTALL_DIR/"
+   done
+   for f in install.sh setup.sh uninstall.sh update-whitelist.sh status.sh whitelist-ips.conf; do
+      [ -f "$SCRIPT_SRC/$f" ] && cp -f "$SCRIPT_SRC/$f" "$INSTALL_DIR/"
+   done
+   echo "      Source installed. You may remove $SCRIPT_SRC after this."
+fi
+CONFIG_DIR="$INSTALL_DIR"
+
 # 1. Install fail2ban if not installed
 if ! rpm -q fail2ban-server &>/dev/null; then
-   echo "[1/6] Installing fail2ban..."
+   echo "[1/7] Installing fail2ban..."
    if command -v dnf &>/dev/null; then
       dnf install -y fail2ban fail2ban-systemd
    elif command -v yum &>/dev/null; then
@@ -81,8 +94,8 @@ else
    echo "      Run: ls /usr/local/apache/domlogs/*/*"
 fi
 
-# 5. Enable and start
-echo "[5/6] Enabling and starting fail2ban..."
+# 6. Enable and start
+echo "[6/7] Enabling and starting fail2ban..."
 systemctl enable fail2ban
 systemctl restart fail2ban
 # Wait for socket to be ready (avoids "Failed to access socket" race on fresh start)

@@ -7,7 +7,9 @@
 
 set -e
 
-CONFIG_DIR="/root/fail2ban"
+INSTALL_DIR="/usr/share/fail2ban-custom"
+[ -d "$INSTALL_DIR" ] || INSTALL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CONFIG_DIR="$INSTALL_DIR"
 WHITELIST="$CONFIG_DIR/whitelist-ips.conf"
 FILTER="$CONFIG_DIR/filter.d/apache-high-volume.conf"
 
@@ -100,4 +102,4 @@ awk -v ign="$IGN_WP" '
 ' "$CONFIG_DIR/filter.d/wordpress-wp-login.conf" > "$tmp"
 mv "$tmp" "$CONFIG_DIR/filter.d/wordpress-wp-login.conf"
 
-echo "Whitelist updated. Run ./setup.sh to deploy."
+echo "Whitelist updated. Run $INSTALL_DIR/setup.sh to deploy."

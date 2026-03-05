@@ -20,6 +20,8 @@ F2B_ACTIONS=(
    /etc/fail2ban/action.d/csf-domain.conf
    /etc/fail2ban/scripts/csf-ban.sh
    /etc/fail2ban/scripts/ignore-countries.conf
+   /etc/fail2ban/scripts/setup-ip2location.sh
+   /etc/fail2ban/scripts/update-ip2location.sh
 )
 F2B_FAIL2BAN_D=(
    /etc/fail2ban/fail2ban.d/loglevel-verbose.conf
@@ -86,12 +88,14 @@ if [[ "$PURGE" == true ]]; then
       echo "      fail2ban was not installed."
    fi
    echo
-   echo "[5/5] Removing /etc/fail2ban/ (leftover config)..."
+   echo "[5/5] Removing /etc/fail2ban/ and /usr/share/fail2ban-custom/..."
    if [[ -d /etc/fail2ban ]]; then
       rm -rf /etc/fail2ban
       echo "      /etc/fail2ban/ removed."
-   else
-      echo "      /etc/fail2ban/ already removed."
+   fi
+   if [[ -d /usr/share/fail2ban-custom ]]; then
+      rm -rf /usr/share/fail2ban-custom
+      echo "      /usr/share/fail2ban-custom/ removed."
    fi
 else
    echo "[3/4] Restarting fail2ban..."
