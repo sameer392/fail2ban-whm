@@ -82,15 +82,19 @@ fi
 tmp=$(mktemp)
 trap "rm -f $tmp" EXIT
 
+# Escape backslashes for awk (avoids "escape sequence treated as plain" warning)
+IGN_HV="${IGNOREREGEX_HV//\\/\\\\}"
+IGN_WP="${IGNOREREGEX_WP//\\/\\\\}"
+
 # Update apache-high-volume filter
-awk -v ign="$IGNOREREGEX_HV" '
+awk -v ign="$IGN_HV" '
     /^ignoreregex =/ { print "ignoreregex = " ign; next }
     { print }
 ' "$CONFIG_DIR/filter.d/apache-high-volume.conf" > "$tmp"
 mv "$tmp" "$CONFIG_DIR/filter.d/apache-high-volume.conf"
 
 # Update wordpress-wp-login filter (whitelist only)
-awk -v ign="$IGNOREREGEX_WP" '
+awk -v ign="$IGN_WP" '
     /^ignoreregex =/ { print "ignoreregex = " ign; next }
     { print }
 ' "$CONFIG_DIR/filter.d/wordpress-wp-login.conf" > "$tmp"
