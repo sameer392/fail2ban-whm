@@ -16,6 +16,10 @@ F2B_JAILS=(
    /etc/fail2ban/jail.d/wordpress-wp-login.conf
    /etc/fail2ban/jail.d/apache-high-volume.conf
 )
+F2B_ACTIONS=(
+   /etc/fail2ban/action.d/csf-domain.conf
+   /etc/fail2ban/scripts/csf-ban.sh
+)
 PURGE=false
 
 # Parse args
@@ -49,7 +53,7 @@ fi
 # 2. Remove deployed config
 echo "[2/4] Removing config..."
 removed=0
-for f in "${F2B_FILTERS[@]}" "${F2B_JAILS[@]}"; do
+for f in "${F2B_FILTERS[@]}" "${F2B_JAILS[@]}" "${F2B_ACTIONS[@]}"; do
    if [[ -f "$f" ]]; then
       rm -f "$f"
       echo "      Removed: $f"

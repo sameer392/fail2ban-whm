@@ -49,9 +49,12 @@ Copies filter and jail to `/etc/fail2ban/` and restarts fail2ban.
 # Install fail2ban (CloudLinux / RHEL / CentOS)
 dnf install fail2ban fail2ban-systemd -y
 
-# Copy config (all filters and jails)
+# Copy config (filters, jails, action, script)
 cp /root/fail2ban/filter.d/*.conf /etc/fail2ban/filter.d/
 cp /root/fail2ban/jail.d/*.conf /etc/fail2ban/jail.d/
+cp /root/fail2ban/action.d/csf-domain.conf /etc/fail2ban/action.d/
+mkdir -p /etc/fail2ban/scripts
+cp /root/fail2ban/scripts/csf-ban.sh /etc/fail2ban/scripts/ && chmod +x /etc/fail2ban/scripts/csf-ban.sh
 
 # Enable and start
 systemctl enable fail2ban
@@ -108,6 +111,8 @@ Attacker → Internet → Server
 | filter.d/apache-high-volume.conf | Match all requests, exclude crawlers (same logic as find_suspicious_ips.sh) |
 | jail.d/wordpress-wp-login.conf | wp-login ban rules |
 | jail.d/apache-high-volume.conf | High-volume ban rules (500/hour, 1hr ban) |
+| action.d/csf-domain.conf | Custom CSF action (jail + domain in comment) |
+| scripts/csf-ban.sh | Helper: adds IP to csf.deny with affected domain(s) (deployed to /etc/fail2ban/scripts/) |
 | whitelist-ips.conf | Whitelisted IPs (excluded from bans) – edit and run update-whitelist.sh |
 
 ### Whitelist IPs
@@ -128,22 +133,14 @@ Supported: single IPs, /24, /28, /29, /32. Other CIDRs fall back to single-IP ma
 
 ---
 
-### Optional: CSF integration
+### CSF integration (default)
 
-To add banned IPs to CSF's deny list, edit the jail:
+Bans are added to CSF's deny list with this comment format:
+- **Format:** `Fail2Ban <jail> - <domain1, domain2, ...>`
+- **Example:** `Fail2Ban wordpress-wp-login - example.com` or `Fail2Ban apache-high-volume - site1.com, site2.com`
+- No "do not delete" prefix; domains indicate which site(s) were affected.
 
-```bash
-nano /etc/fail2ban/jail.d/wordpress-wp-login.conf
-```
-
-Add under `[wordpress-wp-login]`:
-
-```ini
-banaction = csf-repeater
-banaction_allports = csf-repeater
-```
-
-Then restart: `systemctl restart fail2ban`
+Uses custom action `csf-domain` and `scripts/csf-ban.sh` to resolve affected domains from domlogs.
 
 ---
 
