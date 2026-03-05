@@ -297,7 +297,7 @@ $d = $jail_data[$j];
       </tbody>
     </table>
     <p><strong>Banned IPs:</strong>
-      <a href="#" class="reload-banned-ips" data-jail="<?php echo htmlspecialchars($j); ?>" title="Refresh table" style="margin-left:6px;text-decoration:none;"><span class="glyphicon glyphicon-refresh"></span></a>
+      <button type="button" class="btn btn-link reload-banned-ips" data-jail="<?php echo htmlspecialchars($j); ?>" title="Refresh table" style="margin-left:6px;padding:0 4px;vertical-align:middle;"><span class="glyphicon glyphicon-refresh"></span></button>
     </p>
     <div id="banned-ips-<?php echo htmlspecialchars($j); ?>" class="banned-ips-container">
     <?php if (!empty($d['banned_ips'])): $ban_times = get_ban_times($j); ?>
@@ -384,22 +384,33 @@ $d = $jail_data[$j];
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-  document.querySelectorAll('.reload-banned-ips').forEach(function(a) {
-    a.addEventListener('click', function(e) {
+  document.querySelectorAll('.reload-banned-ips').forEach(function(btn) {
+    btn.addEventListener('click', function(e) {
       e.preventDefault();
+      e.stopPropagation();
       var jail = this.getAttribute('data-jail');
       var container = document.getElementById('banned-ips-' + jail);
-      if (!container) return;
+      if (!container) return false;
       var icon = this.querySelector('.glyphicon-refresh');
       if (icon) icon.classList.add('glyphicon-refresh-animate');
-      var url = (window.location.pathname || '') + '?ajax=banned_ips&jail=' + encodeURIComponent(jail);
-      fetch(url).then(function(r) { return r.text(); }).then(function(html) {
-        container.innerHTML = html;
-      }).catch(function() {
-        container.innerHTML = '<p class="text-danger">Failed to refresh.</p>';
-      }).finally(function() {
-        if (icon) icon.classList.remove('glyphicon-refresh-animate');
-      });
+      var base = (window.location.href || '').split('?')[0];
+      var url = base + '?ajax=banned_ips&jail=' + encodeURIComponent(jail);
+      fetch(url, { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(function(r) { return r.text(); })
+        .then(function(html) {
+          if (html && html.length < 50000 && html.indexOf('</html>') === -1 && html.indexOf('<!DOCTYPE') === -1) {
+            container.innerHTML = html;
+          } else {
+            container.innerHTML = '<p class="text-danger">Got full page response; try refreshing the page.</p>';
+          }
+        })
+        .catch(function() {
+          container.innerHTML = '<p class="text-danger">Failed to refresh.</p>';
+        })
+        .finally(function() {
+          if (icon) icon.classList.remove('glyphicon-refresh-animate');
+        });
+      return false;
     });
   });
 });
