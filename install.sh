@@ -95,15 +95,23 @@ else
 fi
 
 # 6. Enable and start
-echo "[6/7] Enabling and starting fail2ban..."
+echo "[6/8] Enabling and starting fail2ban..."
 systemctl enable fail2ban
 systemctl restart fail2ban
 # Wait for socket to be ready (avoids "Failed to access socket" race on fresh start)
 sleep 3
 echo "      fail2ban enabled and restarted."
 
-# 7. Status
-echo "[7/7] Status:"
+# 7. Install WHM plugin (if cPanel present)
+echo "[7/8] Installing WHM plugin..."
+if [ -x /usr/local/cpanel/bin/register_appconfig ] && [ -f "$CONFIG_DIR/whm-plugin/install-whm-plugin.sh" ]; then
+   (cd "$CONFIG_DIR/whm-plugin" && ./install-whm-plugin.sh) || echo "      WHM plugin install skipped or failed."
+else
+   echo "      Skipped (cPanel not detected or plugin not found)."
+fi
+
+# 8. Status
+echo "[8/8] Status:"
 echo
 fail2ban-client status
 echo

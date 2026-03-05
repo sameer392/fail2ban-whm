@@ -72,11 +72,11 @@ fi
 
 # 3. Restart or disable fail2ban
 if [[ "$PURGE" == true ]]; then
-   echo "[3/4] Disabling fail2ban service..."
+   echo "[3/6] Disabling fail2ban service..."
    systemctl disable fail2ban 2>/dev/null || true
    echo "      fail2ban disabled."
    echo
-   echo "[4/5] Uninstalling fail2ban packages..."
+   echo "[4/6] Uninstalling fail2ban packages..."
    if rpm -q fail2ban-server &>/dev/null; then
       if command -v dnf &>/dev/null; then
          dnf remove -y fail2ban fail2ban-systemd fail2ban-firewalld fail2ban-sendmail 2>/dev/null || true
@@ -88,7 +88,17 @@ if [[ "$PURGE" == true ]]; then
       echo "      fail2ban was not installed."
    fi
    echo
-   echo "[5/5] Removing /etc/fail2ban/ and /usr/share/fail2ban/ (custom config)..."
+   echo "[5/6] Uninstalling WHM plugin..."
+   UNINSTALL_WHM=""
+   [[ -f /usr/share/fail2ban/whm-plugin/uninstall-whm-plugin.sh ]] && UNINSTALL_WHM="/usr/share/fail2ban/whm-plugin/uninstall-whm-plugin.sh"
+   [[ -z "$UNINSTALL_WHM" ]] && SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)" && [[ -f "$SCRIPT_DIR/whm-plugin/uninstall-whm-plugin.sh" ]] && UNINSTALL_WHM="$SCRIPT_DIR/whm-plugin/uninstall-whm-plugin.sh"
+   if [[ -n "$UNINSTALL_WHM" ]]; then
+      (cd "$(dirname "$UNINSTALL_WHM")" && ./uninstall-whm-plugin.sh) || echo "      WHM plugin uninstall skipped or failed."
+   else
+      echo "      WHM plugin uninstall script not found."
+   fi
+   echo
+   echo "[6/6] Removing /etc/fail2ban/ and /usr/share/fail2ban/ (custom config)..."
    if [[ -d /etc/fail2ban ]]; then
       rm -rf /etc/fail2ban
       echo "      /etc/fail2ban/ removed."
@@ -104,7 +114,7 @@ else
       sleep 2
       echo "      fail2ban restarted (WordPress jail removed)."
    fi
-   echo "[4/4] (Skipped - use --purge to also uninstall fail2ban packages)"
+   echo "[4/4] (Skipped - use --purge to also uninstall fail2ban, WHM plugin, and remove config)"
 fi
 
 echo
