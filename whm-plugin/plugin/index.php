@@ -222,6 +222,10 @@ if (!checkacl('all')) {
 
 $msg = '';
 $action = $_POST['action'] ?? $_GET['action'] ?? '';
+$current_tab = $_GET['tab'] ?? $_POST['tab'] ?? 'dashboard';
+$valid_tabs = ['dashboard' => 'Dashboard', 'banned' => 'Banned IPs', 'whitelists' => 'Whitelists', 'notifications' => 'Notifications', 'settings' => 'Settings'];
+if (!isset($valid_tabs[$current_tab])) $current_tab = 'dashboard';
+$tab_from_action = ['save_ignore_countries' => 'whitelists', 'save_whitelist_ips' => 'whitelists', 'save_email_alerts' => 'notifications', 'save_loglevel' => 'settings', 'deploy' => 'settings', 'update_ip2location' => 'settings', 'unban' => 'banned', 'unban_bulk' => 'banned', 'unban_whitelisted' => 'banned', 'save_jail_settings' => 'dashboard'];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action) {
     if ($action === 'save_ignore_countries') {
@@ -353,6 +357,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action) {
             $msg = "Could not write email-alerts.conf.";
         }
     }
+    if (isset($tab_from_action[$action])) $current_tab = $tab_from_action[$action];
 }
 
 $ignore_conf = '/etc/fail2ban/scripts/ignore-countries.conf';
@@ -413,15 +418,18 @@ foreach ($jails as $j) {
 // AJAX handler must run BEFORE WHM::header() so we don't output the full page wrapper
 if (isset($_GET['ajax']) && $_GET['ajax'] === 'banned_ips' && isset($_GET['jail'])) {
     $ajail = preg_replace('/[^a-zA-Z0-9_-]/', '', $_GET['jail']);
+    $fs = isset($_GET['fs']) ? '-' . preg_replace('/[^a-zA-Z0-9_-]/', '', $_GET['fs']) : '';
+    $retab = ($fs === '-tab') ? 'banned' : 'dashboard';
     if (in_array($ajail, $jails)) {
         header('Content-Type: text/html; charset=utf-8');
         header('X-Content-Type-Options: nosniff');
         $d = parse_jail_status($ajail);
         $country_cache = [];
+        $form_id = 'bulk-unban-' . $ajail . $fs;
         if (!empty($d['banned_ips'])) {
             $ban_times = get_ban_times($ajail);
             $domain_cache = [];
-            echo '<table class="table table-bordered table-striped table-condensed banned-ips-table"><thead><tr><th><input type="checkbox" class="select-all-banned" data-jail="' . htmlspecialchars($ajail) . '" title="Select all"></th><th>#</th><th>IP Address</th><th>Country</th><th>Affected Domains</th><th>Banned At</th><th>Action</th></tr></thead><tbody>';
+            echo '<table class="table table-bordered table-striped table-condensed banned-ips-table"><thead><tr><th><input type="checkbox" class="select-all-banned" data-jail="' . htmlspecialchars($ajail) . '" data-container="banned-ips-' . htmlspecialchars($ajail) . $fs . '" title="Select all"></th><th>#</th><th>IP Address</th><th>Country</th><th>Affected Domains</th><th>Banned At</th><th>Action</th></tr></thead><tbody>';
             foreach (array_values($d['banned_ips']) as $i => $ip) {
                 $country = get_ip_country($ip, $country_cache);
                 $affected = get_affected_domains($ip, $ajail, $domain_cache);
@@ -429,9 +437,9 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'banned_ips' && isset($_GET['jail'
                 $is_whitelisted = in_array($country, $whitelist_countries_arr);
                 $rowClass = $is_whitelisted ? ' class="warning" style="background:var(--accent-01,#fff3cd)"' : '';
                 $wlLabel = $is_whitelisted ? ' <span class="label label-warning">whitelisted</span>' : '';
-                echo '<tr' . $rowClass . '><td><input type="checkbox" class="banned-ip-cb" name="unban_ips[]" value="' . htmlspecialchars($ip) . '" form="bulk-unban-' . htmlspecialchars($ajail) . '"></td><td>' . ($i + 1) . '</td><td><code>' . htmlspecialchars($ip) . '</code></td><td>' . htmlspecialchars($country) . $wlLabel . '</td><td style="max-width:200px;font-size:11px;" title="' . htmlspecialchars($affected) . '">' . htmlspecialchars($affected) . '</td><td>' . htmlspecialchars($banned_at) . '</td><td><form method="post" style="display:inline;margin:0;"><input type="hidden" name="action" value="unban"><input type="hidden" name="jail" value="' . htmlspecialchars($ajail) . '"><input type="hidden" name="ip" value="' . htmlspecialchars($ip) . '"><button type="submit" class="btn btn-default btn-xs">Unban</button></form></td></tr>';
+                echo '<tr' . $rowClass . '><td><input type="checkbox" class="banned-ip-cb" name="unban_ips[]" value="' . htmlspecialchars($ip) . '" form="' . htmlspecialchars($form_id) . '"></td><td>' . ($i + 1) . '</td><td><code>' . htmlspecialchars($ip) . '</code></td><td>' . htmlspecialchars($country) . $wlLabel . '</td><td style="max-width:200px;font-size:11px;" title="' . htmlspecialchars($affected) . '">' . htmlspecialchars($affected) . '</td><td>' . htmlspecialchars($banned_at) . '</td><td><form method="post" style="display:inline;margin:0;"><input type="hidden" name="action" value="unban"><input type="hidden" name="tab" value="' . htmlspecialchars($retab) . '"><input type="hidden" name="jail" value="' . htmlspecialchars($ajail) . '"><input type="hidden" name="ip" value="' . htmlspecialchars($ip) . '"><button type="submit" class="btn btn-default btn-xs">Unban</button></form></td></tr>';
             }
-            echo '</tbody></table><form id="bulk-unban-' . htmlspecialchars($ajail) . '" method="post" style="margin-top:6px;"><input type="hidden" name="action" value="unban_bulk"><input type="hidden" name="jail" value="' . htmlspecialchars($ajail) . '"><button type="submit" class="btn btn-warning btn-sm bulk-unban-btn" disabled>Unban selected</button></form>';
+            echo '</tbody></table><form id="' . htmlspecialchars($form_id) . '" method="post" style="margin-top:6px;"><input type="hidden" name="action" value="unban_bulk"><input type="hidden" name="tab" value="' . htmlspecialchars($retab) . '"><input type="hidden" name="jail" value="' . htmlspecialchars($ajail) . '"><button type="submit" class="btn btn-warning btn-sm bulk-unban-btn" disabled>Unban selected</button></form>';
         } else {
             echo '<p class="text-muted">No banned IPs.</p>';
         }
@@ -462,17 +470,28 @@ if ($home_url === '//' || $home_url === './') $home_url = '../../';
 
 <?php if (!$geoip_ready): ?>
 <p class="alert alert-warning">
-  <strong>GeoIP not configured.</strong> Country lookup uses ip-api.com (rate-limited). For better reliability, run <code>/etc/fail2ban/scripts/setup-ip2location.sh</code> as root. Use "Update IP2Location DB" below to refresh after setup.
+  <strong>GeoIP not configured.</strong> Country lookup uses ip-api.com (rate-limited). For better reliability, run <code>/etc/fail2ban/scripts/setup-ip2location.sh</code> as root. Use "Update IP2Location DB" in the Settings tab to refresh after setup.
 </p>
 <?php endif; ?>
 
 <?php if (!empty($whitelist_countries_arr)): ?>
 <p class="alert alert-warning">
-  <strong>Note:</strong> IPs from whitelisted countries (<?php echo htmlspecialchars($ignore_countries); ?>) may appear if they were banned <em>before</em> the whitelist was added. Use "Unban all from whitelisted countries" below to remove them.
+  <strong>Note:</strong> IPs from whitelisted countries (<?php echo htmlspecialchars($ignore_countries); ?>) may appear if they were banned <em>before</em> the whitelist was added. Use "Unban all from whitelisted countries" in the Banned IPs tab to remove them.
 </p>
 <?php endif; ?>
 
 <div class="fail2ban-manager">
+<ul class="nav nav-tabs" role="tablist" style="margin-bottom:15px;">
+  <?php foreach ($valid_tabs as $tid => $tlabel): ?>
+  <li role="presentation" class="<?php echo $current_tab === $tid ? 'active' : ''; ?>">
+    <a href="?tab=<?php echo urlencode($tid); ?>" aria-controls="tab-<?php echo htmlspecialchars($tid); ?>" role="tab"><?php echo htmlspecialchars($tlabel); ?></a>
+  </li>
+  <?php endforeach; ?>
+</ul>
+
+<div class="tab-content">
+<!-- Tab: Dashboard -->
+<div role="tabpanel" class="tab-pane <?php echo $current_tab === 'dashboard' ? 'active' : ''; ?>" id="tab-dashboard">
 <div class="row">
 <div class="col-md-8">
 
@@ -508,6 +527,7 @@ $js = $jail_settings[$j] ?? ['maxretry' => 5, 'findtime' => 300, 'bantime' => 36
     </table>
     <form method="post" class="form-inline jail-settings-form" style="margin-bottom:12px;padding:8px;background:var(--base-01,#f9f9f9);border-radius:4px;" data-maxretry-min="1" data-maxretry-max="10000" data-findtime-min="60" data-findtime-max="2592000" data-bantime-min="60" data-bantime-max="31536000">
       <input type="hidden" name="action" value="save_jail_settings">
+      <input type="hidden" name="tab" value="dashboard">
       <input type="hidden" name="jail" value="<?php echo htmlspecialchars($j); ?>">
       <label>maxretry</label>
       <input type="number" name="maxretry" value="<?php echo (int)$js['maxretry']; ?>" min="1" max="10000" class="form-control input-sm" style="width:70px;margin:0 8px 0 4px;" title="Max attempts before ban (1-10000)" required>
@@ -540,7 +560,7 @@ $js = $jail_settings[$j] ?? ['maxretry' => 5, 'findtime' => 300, 'bantime' => 36
     <div id="banned-ips-<?php echo htmlspecialchars($j); ?>" class="banned-ips-container">
     <?php if (!empty($d['banned_ips'])): $ban_times = get_ban_times($j); $domain_cache = []; ?>
     <table class="table table-bordered table-striped table-condensed banned-ips-table">
-      <thead><tr><th><input type="checkbox" class="select-all-banned" data-jail="<?php echo htmlspecialchars($j); ?>" title="Select all"></th><th>#</th><th>IP Address</th><th>Country</th><th>Affected Domains</th><th>Banned At</th><th>Action</th></tr></thead>
+      <thead><tr><th><input type="checkbox" class="select-all-banned" data-jail="<?php echo htmlspecialchars($j); ?>" data-container="banned-ips-<?php echo htmlspecialchars($j); ?>" title="Select all"></th><th>#</th><th>IP Address</th><th>Country</th><th>Affected Domains</th><th>Banned At</th><th>Action</th></tr></thead>
       <tbody>
       <?php $country_cache = []; foreach (array_values($d['banned_ips']) as $i => $ip): $country = get_ip_country($ip, $country_cache); $affected = get_affected_domains($ip, $j, $domain_cache); $banned_at = $ban_times[$ip] ?? '-'; $is_whitelisted = in_array($country, $whitelist_countries_arr); ?>
         <tr<?php echo $is_whitelisted ? ' class="warning" style="background:var(--accent-01,#fff3cd)"' : ''; ?>>
@@ -553,6 +573,7 @@ $js = $jail_settings[$j] ?? ['maxretry' => 5, 'findtime' => 300, 'bantime' => 36
           <td>
             <form method="post" style="display:inline;margin:0;">
               <input type="hidden" name="action" value="unban">
+              <input type="hidden" name="tab" value="dashboard">
               <input type="hidden" name="jail" value="<?php echo htmlspecialchars($j); ?>">
               <input type="hidden" name="ip" value="<?php echo htmlspecialchars($ip); ?>">
               <button type="submit" class="btn btn-default btn-xs">Unban</button>
@@ -564,6 +585,7 @@ $js = $jail_settings[$j] ?? ['maxretry' => 5, 'findtime' => 300, 'bantime' => 36
     </table>
     <form id="bulk-unban-<?php echo htmlspecialchars($j); ?>" method="post" style="margin-top:6px;">
       <input type="hidden" name="action" value="unban_bulk">
+      <input type="hidden" name="tab" value="dashboard">
       <input type="hidden" name="jail" value="<?php echo htmlspecialchars($j); ?>">
       <button type="submit" class="btn btn-warning btn-sm bulk-unban-btn" disabled>Unban selected</button>
     </form>
@@ -573,6 +595,7 @@ $js = $jail_settings[$j] ?? ['maxretry' => 5, 'findtime' => 300, 'bantime' => 36
     </div>
     <form method="post" class="form-inline" style="margin-top:8px;">
       <input type="hidden" name="action" value="unban">
+      <input type="hidden" name="tab" value="dashboard">
       <input type="hidden" name="jail" value="<?php echo htmlspecialchars($j); ?>">
       <input type="text" name="ip" placeholder="IP to unban" class="form-control input-sm" style="width:150px;">
       <button type="submit" class="btn btn-default btn-sm">Unban</button>
@@ -581,101 +604,236 @@ $js = $jail_settings[$j] ?? ['maxretry' => 5, 'findtime' => 300, 'bantime' => 36
 </div>
 <?php endforeach; ?>
 
+</div>
+<p style="margin-top:12px;"><a href="?tab=banned" class="btn btn-link btn-sm">View all banned IPs &rarr;</a></p>
+</div>
+<div class="col-md-4">
+  <div class="panel panel-default">
+    <div class="panel-heading">Quick Actions</div>
+    <div class="panel-body">
+      <form method="post" style="margin-bottom:8px;">
+        <input type="hidden" name="action" value="deploy">
+        <input type="hidden" name="tab" value="dashboard">
+        <button type="submit" class="btn btn-primary btn-sm btn-block">Deploy config &amp; restart</button>
+      </form>
+      <form method="post">
+        <input type="hidden" name="action" value="update_ip2location">
+        <input type="hidden" name="tab" value="dashboard">
+        <button type="submit" class="btn btn-default btn-sm btn-block">Update IP2Location DB</button>
+      </form>
+    </div>
+  </div>
+</div>
+</div>
+</div>
+
+<!-- Tab: Banned IPs -->
+<div role="tabpanel" class="tab-pane <?php echo $current_tab === 'banned' ? 'active' : ''; ?>" id="tab-banned">
 <?php if (!empty($whitelist_countries_arr)): ?>
-<div class="panel panel-warning" style="margin-top:15px;">
+<div class="panel panel-warning" style="margin-bottom:15px;">
   <div class="panel-heading">Whitelisted countries: <?php echo htmlspecialchars($ignore_countries); ?></div>
   <div class="panel-body">
-    <p class="text-muted">IPs from these countries appearing above were likely banned before the whitelist was added.</p>
+    <p class="text-muted">IPs from these countries may appear if banned before the whitelist was added.</p>
     <form method="post">
       <input type="hidden" name="action" value="unban_whitelisted">
+      <input type="hidden" name="tab" value="banned">
       <input type="hidden" name="whitelist_countries" value="<?php echo htmlspecialchars($ignore_countries); ?>">
       <button type="submit" class="btn btn-warning">Unban all from whitelisted countries</button>
     </form>
   </div>
 </div>
 <?php endif; ?>
-
+<?php foreach ($jails as $j):
+$d = $jail_data[$j];
+?>
+<div class="panel panel-default">
+  <div class="panel-heading"><?php echo htmlspecialchars($j); ?> — Banned IPs</div>
+  <div class="panel-body">
+    <p><strong>Banned IPs:</strong>
+      <button type="button" class="btn btn-link reload-banned-ips" data-jail="<?php echo htmlspecialchars($j); ?>" title="Refresh"><span class="glyphicon glyphicon-refresh"></span></button>
+    </p>
+    <div id="banned-ips-<?php echo htmlspecialchars($j); ?>-tab" class="banned-ips-container">
+    <?php if (!empty($d['banned_ips'])): $ban_times = get_ban_times($j); $domain_cache = []; ?>
+    <table class="table table-bordered table-striped table-condensed banned-ips-table">
+      <thead><tr><th><input type="checkbox" class="select-all-banned" data-jail="<?php echo htmlspecialchars($j); ?>" data-container="banned-ips-<?php echo htmlspecialchars($j); ?>-tab" title="Select all"></th><th>#</th><th>IP Address</th><th>Country</th><th>Affected Domains</th><th>Banned At</th><th>Action</th></tr></thead>
+      <tbody>
+      <?php $country_cache = []; foreach (array_values($d['banned_ips']) as $i => $ip): $country = get_ip_country($ip, $country_cache); $affected = get_affected_domains($ip, $j, $domain_cache); $banned_at = $ban_times[$ip] ?? '-'; $is_whitelisted = in_array($country, $whitelist_countries_arr); ?>
+        <tr<?php echo $is_whitelisted ? ' class="warning"' : ''; ?>>
+          <td><input type="checkbox" class="banned-ip-cb" name="unban_ips[]" value="<?php echo htmlspecialchars($ip); ?>" form="bulk-unban-<?php echo htmlspecialchars($j); ?>-tab"></td>
+          <td><?php echo $i + 1; ?></td>
+          <td><code><?php echo htmlspecialchars($ip); ?></code></td>
+          <td><?php echo htmlspecialchars($country); ?><?php if ($is_whitelisted): ?> <span class="label label-warning">whitelisted</span><?php endif; ?></td>
+          <td style="max-width:200px;font-size:11px;" title="<?php echo htmlspecialchars($affected); ?>"><?php echo htmlspecialchars($affected); ?></td>
+          <td><?php echo htmlspecialchars($banned_at); ?></td>
+          <td>
+            <form method="post" style="display:inline;margin:0;">
+              <input type="hidden" name="action" value="unban">
+              <input type="hidden" name="tab" value="banned">
+              <input type="hidden" name="jail" value="<?php echo htmlspecialchars($j); ?>">
+              <input type="hidden" name="ip" value="<?php echo htmlspecialchars($ip); ?>">
+              <button type="submit" class="btn btn-default btn-xs">Unban</button>
+            </form>
+          </td>
+        </tr>
+      <?php endforeach; ?>
+      </tbody>
+    </table>
+    <form id="bulk-unban-<?php echo htmlspecialchars($j); ?>-tab" method="post" style="margin-top:6px;">
+      <input type="hidden" name="action" value="unban_bulk">
+      <input type="hidden" name="tab" value="banned">
+      <input type="hidden" name="jail" value="<?php echo htmlspecialchars($j); ?>">
+      <button type="submit" class="btn btn-warning btn-sm bulk-unban-btn" disabled>Unban selected</button>
+    </form>
+    <?php else: ?>
+    <p class="text-muted">No banned IPs.</p>
+    <?php endif; ?>
+    </div>
+    <form method="post" class="form-inline" style="margin-top:8px;">
+      <input type="hidden" name="action" value="unban">
+      <input type="hidden" name="tab" value="banned">
+      <input type="hidden" name="jail" value="<?php echo htmlspecialchars($j); ?>">
+      <input type="text" name="ip" placeholder="IP to unban" class="form-control input-sm" style="width:150px;">
+      <button type="submit" class="btn btn-default btn-sm">Unban</button>
+    </form>
+  </div>
 </div>
-<div class="col-md-4">
-
-<h3>Ignore Countries</h3>
-<p class="text-muted">ISO codes (e.g. IN,US,GB). IPs from these countries are not banned.</p>
-<form method="post">
-  <input type="hidden" name="action" value="save_ignore_countries">
-  <input type="text" name="whitelist_countries" value="<?php echo htmlspecialchars($ignore_countries); ?>" class="form-control" placeholder="IN,US,GB">
-  <button type="submit" class="btn btn-primary btn-sm" style="margin-top:5px;">Save</button>
-</form>
-
-<h3 style="margin-top:20px;">Whitelist IPs</h3>
-<p class="text-muted">IPs/CIDRs excluded from bans. One per line.</p>
-<form method="post">
-  <input type="hidden" name="action" value="save_whitelist_ips">
-  <textarea name="whitelist_ips" class="form-control" rows="8" style="font-family:monospace;font-size:12px;"><?php echo htmlspecialchars($whitelist_ips); ?></textarea>
-  <button type="submit" class="btn btn-primary btn-sm" style="margin-top:5px;">Save &amp; Deploy</button>
-</form>
-
-<h3 style="margin-top:20px;">Log Level</h3>
-<p class="text-muted" style="font-size:12px;">Verbosity of /var/log/fail2ban.log (INFO=more detail, WARNING=less).</p>
-<form method="post" class="form-inline">
-  <input type="hidden" name="action" value="save_loglevel">
-  <select name="loglevel" class="form-control input-sm" style="width:120px;">
-    <option value="DEBUG"<?php echo $current_loglevel === 'DEBUG' ? ' selected' : ''; ?>>DEBUG</option>
-    <option value="INFO"<?php echo $current_loglevel === 'INFO' ? ' selected' : ''; ?>>INFO</option>
-    <option value="WARNING"<?php echo $current_loglevel === 'WARNING' ? ' selected' : ''; ?>>WARNING</option>
-    <option value="ERROR"<?php echo $current_loglevel === 'ERROR' ? ' selected' : ''; ?>>ERROR</option>
-    <option value="CRITICAL"<?php echo $current_loglevel === 'CRITICAL' ? ' selected' : ''; ?>>CRITICAL</option>
-  </select>
-  <button type="submit" class="btn btn-primary btn-sm" style="margin-left:6px;">Apply</button>
-</form>
-
-<h3 style="margin-top:20px;">Email Alerts</h3>
-<p class="text-muted" style="font-size:12px;">Receive email when an IP is banned. Uses SMTP.</p>
-<form method="post">
-  <input type="hidden" name="action" value="save_email_alerts">
-  <label class="checkbox-inline"><input type="checkbox" name="email_alerts_enabled" value="1"<?php echo $email_alerts_enabled ? ' checked' : ''; ?>> Enable</label>
-  <div style="margin-top:8px;">
-    <label class="control-label" style="font-size:11px;">SMTP Host</label>
-    <input type="text" name="smtp_host" value="<?php echo htmlspecialchars($smtp_host); ?>" class="form-control input-sm" placeholder="smtp.example.com" style="width:100%;max-width:260px;">
-  </div>
-  <div style="margin-top:4px;">
-    <label class="control-label" style="font-size:11px;">Port</label>
-    <input type="number" name="smtp_port" value="<?php echo (int)$smtp_port; ?>" min="1" max="65535" class="form-control input-sm" style="width:80px;display:inline-block;"> 
-    <select name="smtp_secure" class="form-control input-sm" style="width:90px;display:inline-block;margin-left:4px;">
-      <option value="none"<?php echo $smtp_secure === 'none' ? ' selected' : ''; ?>>None</option>
-      <option value="tls"<?php echo $smtp_secure === 'tls' ? ' selected' : ''; ?>>TLS</option>
-      <option value="ssl"<?php echo $smtp_secure === 'ssl' ? ' selected' : ''; ?>>SSL</option>
-    </select>
-  </div>
-  <div style="margin-top:4px;">
-    <label class="control-label" style="font-size:11px;">Username</label>
-    <input type="text" name="smtp_user" value="<?php echo htmlspecialchars($smtp_user); ?>" class="form-control input-sm" placeholder="user@example.com" style="width:100%;max-width:260px;">
-  </div>
-  <div style="margin-top:4px;">
-    <label class="control-label" style="font-size:11px;">Password</label>
-    <input type="password" name="smtp_pass" value="" class="form-control input-sm" placeholder="Leave blank to keep current" autocomplete="new-password" style="width:100%;max-width:260px;">
-  </div>
-  <div style="margin-top:4px;">
-    <label class="control-label" style="font-size:11px;">From address</label>
-    <input type="email" name="email_from" value="<?php echo htmlspecialchars($email_from); ?>" class="form-control input-sm" placeholder="noreply@example.com" style="width:100%;max-width:260px;">
-  </div>
-  <div style="margin-top:4px;">
-    <label class="control-label" style="font-size:11px;">Recipient (To)</label>
-    <input type="email" name="email_alerts_to" value="<?php echo htmlspecialchars($email_alerts_to); ?>" class="form-control input-sm" placeholder="admin@example.com" style="width:100%;max-width:260px;">
-  </div>
-  <button type="submit" class="btn btn-default btn-sm" style="margin-top:8px;">Save</button>
-</form>
-
-<h3 style="margin-top:20px;">Actions</h3>
-<form method="post" style="display:inline;">
-  <input type="hidden" name="action" value="deploy">
-  <button type="submit" class="btn btn-default btn-sm">Deploy config &amp; restart</button>
-</form>
-<form method="post" style="display:inline;margin-left:5px;">
-  <input type="hidden" name="action" value="update_ip2location">
-  <button type="submit" class="btn btn-default btn-sm">Update IP2Location DB</button>
-</form>
-
+<?php endforeach; ?>
 </div>
+
+<!-- Tab: Whitelists -->
+<div role="tabpanel" class="tab-pane <?php echo $current_tab === 'whitelists' ? 'active' : ''; ?>" id="tab-whitelists">
+<div class="row">
+  <div class="col-md-6">
+    <div class="panel panel-default">
+      <div class="panel-heading">Ignore Countries</div>
+      <div class="panel-body">
+        <p class="text-muted">ISO codes (e.g. IN,US,GB). IPs from these countries are never banned.</p>
+        <form method="post">
+          <input type="hidden" name="action" value="save_ignore_countries">
+          <input type="hidden" name="tab" value="whitelists">
+          <input type="text" name="whitelist_countries" value="<?php echo htmlspecialchars($ignore_countries); ?>" class="form-control" placeholder="IN,US,GB">
+          <button type="submit" class="btn btn-primary btn-sm" style="margin-top:8px;">Save</button>
+        </form>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="panel panel-default">
+      <div class="panel-heading">Whitelist IPs</div>
+      <div class="panel-body">
+        <p class="text-muted">IPs/CIDRs excluded from bans. One per line.</p>
+        <form method="post">
+          <input type="hidden" name="action" value="save_whitelist_ips">
+          <input type="hidden" name="tab" value="whitelists">
+          <textarea name="whitelist_ips" class="form-control" rows="8" style="font-family:monospace;font-size:12px;"><?php echo htmlspecialchars($whitelist_ips); ?></textarea>
+          <button type="submit" class="btn btn-primary btn-sm" style="margin-top:8px;">Save &amp; Deploy</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- Tab: Notifications -->
+<div role="tabpanel" class="tab-pane <?php echo $current_tab === 'notifications' ? 'active' : ''; ?>" id="tab-notifications">
+<div class="panel panel-default" style="max-width:500px;">
+  <div class="panel-heading">Email Alerts</div>
+  <div class="panel-body">
+    <p class="text-muted">Receive email when an IP is banned. Uses SMTP.</p>
+    <form method="post">
+      <input type="hidden" name="action" value="save_email_alerts">
+      <input type="hidden" name="tab" value="notifications">
+      <div class="form-group">
+        <label class="checkbox-inline"><input type="checkbox" name="email_alerts_enabled" value="1"<?php echo $email_alerts_enabled ? ' checked' : ''; ?>> Enable</label>
+      </div>
+      <div class="form-group">
+        <label>SMTP Host</label>
+        <input type="text" name="smtp_host" value="<?php echo htmlspecialchars($smtp_host); ?>" class="form-control" placeholder="smtp.example.com">
+      </div>
+      <div class="form-group form-inline">
+        <label>Port</label>
+        <input type="number" name="smtp_port" value="<?php echo (int)$smtp_port; ?>" min="1" max="65535" class="form-control" style="width:80px;"> 
+        <select name="smtp_secure" class="form-control" style="width:90px;margin-left:8px;">
+          <option value="none"<?php echo $smtp_secure === 'none' ? ' selected' : ''; ?>>None</option>
+          <option value="tls"<?php echo $smtp_secure === 'tls' ? ' selected' : ''; ?>>TLS</option>
+          <option value="ssl"<?php echo $smtp_secure === 'ssl' ? ' selected' : ''; ?>>SSL</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Username</label>
+        <input type="text" name="smtp_user" value="<?php echo htmlspecialchars($smtp_user); ?>" class="form-control" placeholder="user@example.com">
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" name="smtp_pass" value="" class="form-control" placeholder="Leave blank to keep current" autocomplete="new-password">
+      </div>
+      <div class="form-group">
+        <label>From address</label>
+        <input type="email" name="email_from" value="<?php echo htmlspecialchars($email_from); ?>" class="form-control" placeholder="noreply@example.com">
+      </div>
+      <div class="form-group">
+        <label>Recipient (To)</label>
+        <input type="email" name="email_alerts_to" value="<?php echo htmlspecialchars($email_alerts_to); ?>" class="form-control" placeholder="admin@example.com">
+      </div>
+      <button type="submit" class="btn btn-primary">Save</button>
+    </form>
+  </div>
+</div>
+</div>
+
+<!-- Tab: Settings -->
+<div role="tabpanel" class="tab-pane <?php echo $current_tab === 'settings' ? 'active' : ''; ?>" id="tab-settings">
+<div class="row">
+  <div class="col-md-6">
+    <div class="panel panel-default">
+      <div class="panel-heading">Log Level</div>
+      <div class="panel-body">
+        <p class="text-muted">Verbosity of /var/log/fail2ban.log</p>
+        <form method="post" class="form-inline">
+          <input type="hidden" name="action" value="save_loglevel">
+          <input type="hidden" name="tab" value="settings">
+          <select name="loglevel" class="form-control">
+            <option value="DEBUG"<?php echo $current_loglevel === 'DEBUG' ? ' selected' : ''; ?>>DEBUG</option>
+            <option value="INFO"<?php echo $current_loglevel === 'INFO' ? ' selected' : ''; ?>>INFO</option>
+            <option value="WARNING"<?php echo $current_loglevel === 'WARNING' ? ' selected' : ''; ?>>WARNING</option>
+            <option value="ERROR"<?php echo $current_loglevel === 'ERROR' ? ' selected' : ''; ?>>ERROR</option>
+            <option value="CRITICAL"<?php echo $current_loglevel === 'CRITICAL' ? ' selected' : ''; ?>>CRITICAL</option>
+          </select>
+          <button type="submit" class="btn btn-primary" style="margin-left:8px;">Apply</button>
+        </form>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="panel panel-default">
+      <div class="panel-heading">Actions</div>
+      <div class="panel-body">
+        <form method="post" style="margin-bottom:8px;">
+          <input type="hidden" name="action" value="deploy">
+          <input type="hidden" name="tab" value="settings">
+          <button type="submit" class="btn btn-primary btn-block">Deploy config &amp; restart</button>
+        </form>
+        <form method="post">
+          <input type="hidden" name="action" value="update_ip2location">
+          <input type="hidden" name="tab" value="settings">
+          <button type="submit" class="btn btn-default btn-block">Update IP2Location DB</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+<?php if (!$geoip_ready): ?>
+<div class="panel panel-warning" style="margin-top:15px;">
+  <div class="panel-heading">GeoIP Setup</div>
+  <div class="panel-body">
+    <p>Country lookup uses ip-api.com (rate-limited). For better reliability, run:</p>
+    <pre style="margin:0;">/etc/fail2ban/scripts/setup-ip2location.sh</pre>
+    <p class="text-muted" style="margin-top:8px;">Use "Update IP2Location DB" above to refresh after setup.</p>
+  </div>
+</div>
+<?php endif; ?>
+</div>
+
 </div>
 </div>
 
@@ -727,7 +885,8 @@ document.addEventListener('DOMContentLoaded', function() {
   document.addEventListener('change', function(e) {
     if (e.target.classList.contains('select-all-banned')) {
       var jail = e.target.getAttribute('data-jail');
-      var container = document.getElementById('banned-ips-' + jail);
+      var cid = e.target.getAttribute('data-container') || ('banned-ips-' + jail);
+      var container = document.getElementById(cid);
       if (!container) return;
       var checked = e.target.checked;
       container.querySelectorAll('.banned-ip-cb').forEach(function(cb) { cb.checked = checked; });
@@ -747,12 +906,13 @@ document.addEventListener('DOMContentLoaded', function() {
       e.preventDefault();
       e.stopPropagation();
       var jail = this.getAttribute('data-jail');
-      var container = document.getElementById('banned-ips-' + jail);
+      var container = document.getElementById('banned-ips-' + jail + '-tab') || document.getElementById('banned-ips-' + jail);
       if (!container) return false;
       var icon = this.querySelector('.glyphicon-refresh');
       if (icon) icon.classList.add('glyphicon-refresh-animate');
       var base = (window.location.href || '').split('?')[0];
-      var url = base + '?ajax=banned_ips&jail=' + encodeURIComponent(jail);
+      var fs = (container.id && container.id.indexOf('-tab') > 0) ? '&fs=tab' : '';
+      var url = base + '?ajax=banned_ips&jail=' + encodeURIComponent(jail) + fs;
       fetch(url, { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } })
         .then(function(r) { return r.text(); })
         .then(function(html) {
