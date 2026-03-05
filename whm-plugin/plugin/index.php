@@ -50,6 +50,21 @@ function get_ip_country($ip, &$cache = []) {
     return $cache[$ip] = ($country ?: '-');
 }
 
+function get_ban_times($jail) {
+    $times = [];
+    $db = '/var/lib/fail2ban/fail2ban.sqlite3';
+    if (!file_exists($db) || !is_readable($db)) return $times;
+    $jail_esc = preg_replace('/[^a-zA-Z0-9_-]/', '', $jail);
+    $out = [];
+    exec("sqlite3 -separator '|' " . escapeshellarg($db) . " \"SELECT ip, datetime(timeofban, 'unixepoch', 'localtime') FROM bips WHERE jail='" . $jail_esc . "'\" 2>/dev/null", $out, $ret);
+    if ($ret !== 0) return $times;
+    foreach ($out as $line) {
+        $p = explode('|', $line, 2);
+        if (count($p) === 2) $times[trim($p[0])] = trim($p[1]);
+    }
+    return $times;
+}
+
 function parse_jail_status($jail) {
     $data = ['active' => false, 'currently_failed' => '-', 'total_failed' => '-', 'currently_banned' => '-', 'total_banned' => '-', 'banned_ips' => []];
     exec("fail2ban-client status " . escapeshellarg($jail) . " 2>/dev/null", $out, $ret);
@@ -189,16 +204,17 @@ $d = $jail_data[$j];
         <tr><td>Total banned</td><td><?php echo htmlspecialchars($d['total_banned']); ?></td></tr>
       </tbody>
     </table>
-    <?php if (!empty($d['banned_ips'])): ?>
+    <?php if (!empty($d['banned_ips'])): $ban_times = get_ban_times($j); ?>
     <p><strong>Banned IPs:</strong></p>
     <table class="table table-bordered table-striped table-condensed">
-      <thead><tr><th>#</th><th>IP Address</th><th>Country</th><th>Action</th></tr></thead>
+      <thead><tr><th>#</th><th>IP Address</th><th>Country</th><th>Banned At</th><th>Action</th></tr></thead>
       <tbody>
-      <?php $country_cache = []; foreach (array_values($d['banned_ips']) as $i => $ip): $country = get_ip_country($ip, $country_cache); ?>
+      <?php $country_cache = []; foreach (array_values($d['banned_ips']) as $i => $ip): $country = get_ip_country($ip, $country_cache); $banned_at = $ban_times[$ip] ?? '-'; ?>
         <tr>
           <td><?php echo $i + 1; ?></td>
           <td><code><?php echo htmlspecialchars($ip); ?></code></td>
           <td><?php echo htmlspecialchars($country); ?></td>
+          <td><?php echo htmlspecialchars($banned_at); ?></td>
           <td>
             <form method="post" style="display:inline;margin:0;">
               <input type="hidden" name="action" value="unban">
