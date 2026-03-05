@@ -31,6 +31,11 @@ echo "      Config deployed."
 
 echo "[2/2] Restarting fail2ban..."
 systemctl restart fail2ban
+# Wait for fail2ban socket to be ready (avoid "Failed to access socket" on quick re-runs)
+for i in {1..10}; do
+    fail2ban-client status &>/dev/null && break
+    sleep 1
+done
 echo "      Done."
 
 echo
