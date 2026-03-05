@@ -219,6 +219,33 @@ $jail_data = [];
 foreach ($jails as $j) {
     $jail_data[$j] = parse_jail_status($j);
 }
+
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'banned_ips' && isset($_GET['jail'])) {
+    $ajail = preg_replace('/[^a-zA-Z0-9_-]/', '', $_GET['jail']);
+    if (in_array($ajail, $jails)) {
+        header('Content-Type: text/html; charset=utf-8');
+        header('X-Content-Type-Options: nosniff');
+        $d = parse_jail_status($ajail);
+        $country_cache = [];
+        if (!empty($d['banned_ips'])) {
+            $ban_times = get_ban_times($ajail);
+            echo '<table class="table table-bordered table-striped table-condensed"><thead><tr><th>#</th><th>IP Address</th><th>Country</th><th>Banned At</th><th>Action</th></tr></thead><tbody>';
+            foreach (array_values($d['banned_ips']) as $i => $ip) {
+                $country = get_ip_country($ip, $country_cache);
+                $banned_at = $ban_times[$ip] ?? '-';
+                $is_whitelisted = in_array($country, $whitelist_countries_arr);
+                $rowClass = $is_whitelisted ? ' class="warning" style="background:#fff3cd"' : '';
+                $wlLabel = $is_whitelisted ? ' <span class="label label-warning">whitelisted</span>' : '';
+                echo '<tr' . $rowClass . '><td>' . ($i + 1) . '</td><td><code>' . htmlspecialchars($ip) . '</code></td><td>' . htmlspecialchars($country) . $wlLabel . '</td><td>' . htmlspecialchars($banned_at) . '</td><td><form method="post" style="display:inline;margin:0;"><input type="hidden" name="action" value="unban"><input type="hidden" name="jail" value="' . htmlspecialchars($ajail) . '"><input type="hidden" name="ip" value="' . htmlspecialchars($ip) . '"><button type="submit" class="btn btn-default btn-xs">Unban</button></form></td></tr>';
+            }
+            echo '</tbody></table>';
+        } else {
+            echo '<p class="text-muted">No banned IPs.</p>';
+        }
+        exit;
+    }
+}
+
 exec('fail2ban-client status 2>/dev/null', $gen_out, $gen_ret);
 $general_status = $gen_ret === 0 ? implode("\n", array_slice($gen_out, 0, 15)) : 'fail2ban not running';
 
@@ -269,8 +296,11 @@ $d = $jail_data[$j];
         <tr><td>Total banned</td><td><?php echo htmlspecialchars($d['total_banned']); ?></td></tr>
       </tbody>
     </table>
+    <p><strong>Banned IPs:</strong>
+      <a href="#" class="reload-banned-ips" data-jail="<?php echo htmlspecialchars($j); ?>" title="Refresh table" style="margin-left:6px;text-decoration:none;"><span class="glyphicon glyphicon-refresh"></span></a>
+    </p>
+    <div id="banned-ips-<?php echo htmlspecialchars($j); ?>" class="banned-ips-container">
     <?php if (!empty($d['banned_ips'])): $ban_times = get_ban_times($j); ?>
-    <p><strong>Banned IPs:</strong></p>
     <table class="table table-bordered table-striped table-condensed">
       <thead><tr><th>#</th><th>IP Address</th><th>Country</th><th>Banned At</th><th>Action</th></tr></thead>
       <tbody>
@@ -292,7 +322,10 @@ $d = $jail_data[$j];
       <?php endforeach; ?>
       </tbody>
     </table>
+    <?php else: ?>
+    <p class="text-muted">No banned IPs.</p>
     <?php endif; ?>
+    </div>
     <form method="post" class="form-inline" style="margin-top:8px;">
       <input type="hidden" name="action" value="unban">
       <input type="hidden" name="jail" value="<?php echo htmlspecialchars($j); ?>">
@@ -348,5 +381,32 @@ $d = $jail_data[$j];
 
 </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  document.querySelectorAll('.reload-banned-ips').forEach(function(a) {
+    a.addEventListener('click', function(e) {
+      e.preventDefault();
+      var jail = this.getAttribute('data-jail');
+      var container = document.getElementById('banned-ips-' + jail);
+      if (!container) return;
+      var icon = this.querySelector('.glyphicon-refresh');
+      if (icon) icon.classList.add('glyphicon-refresh-animate');
+      var url = (window.location.pathname || '') + '?ajax=banned_ips&jail=' + encodeURIComponent(jail);
+      fetch(url).then(function(r) { return r.text(); }).then(function(html) {
+        container.innerHTML = html;
+      }).catch(function() {
+        container.innerHTML = '<p class="text-danger">Failed to refresh.</p>';
+      }).finally(function() {
+        if (icon) icon.classList.remove('glyphicon-refresh-animate');
+      });
+    });
+  });
+});
+</script>
+<style>
+.glyphicon-refresh-animate { animation: spin 0.8s linear infinite; }
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+</style>
 
 <?php WHM::footer(); ?>
