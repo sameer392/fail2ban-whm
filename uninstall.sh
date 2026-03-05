@@ -7,8 +7,15 @@
 
 set -e
 
-F2B_FILTER="/etc/fail2ban/filter.d/wordpress-wp-login.conf"
-F2B_JAIL="/etc/fail2ban/jail.d/wordpress-wp-login.conf"
+# Configs we deploy (must match setup.sh)
+F2B_FILTERS=(
+   /etc/fail2ban/filter.d/wordpress-wp-login.conf
+   /etc/fail2ban/filter.d/apache-high-volume.conf
+)
+F2B_JAILS=(
+   /etc/fail2ban/jail.d/wordpress-wp-login.conf
+   /etc/fail2ban/jail.d/apache-high-volume.conf
+)
 PURGE=false
 
 # Parse args
@@ -42,18 +49,15 @@ fi
 # 2. Remove deployed config
 echo "[2/4] Removing config..."
 removed=0
-if [[ -f "$F2B_FILTER" ]]; then
-   rm -f "$F2B_FILTER"
-   echo "      Removed: $F2B_FILTER"
-   removed=1
-fi
-if [[ -f "$F2B_JAIL" ]]; then
-   rm -f "$F2B_JAIL"
-   echo "      Removed: $F2B_JAIL"
-   removed=1
-fi
+for f in "${F2B_FILTERS[@]}" "${F2B_JAILS[@]}"; do
+   if [[ -f "$f" ]]; then
+      rm -f "$f"
+      echo "      Removed: $f"
+      removed=1
+   fi
+done
 if [[ $removed -eq 0 ]]; then
-   echo "      No WordPress wp-login config found."
+   echo "      No deployed config found."
 fi
 
 # 3. Restart or disable fail2ban
@@ -62,7 +66,7 @@ if [[ "$PURGE" == true ]]; then
    systemctl disable fail2ban 2>/dev/null || true
    echo "      fail2ban disabled."
    echo
-   echo "[4/4] Uninstalling fail2ban packages..."
+   echo "[4/5] Uninstalling fail2ban packages..."
    if rpm -q fail2ban-server &>/dev/null; then
       if command -v dnf &>/dev/null; then
          dnf remove -y fail2ban fail2ban-systemd fail2ban-firewalld fail2ban-sendmail 2>/dev/null || true
@@ -72,6 +76,14 @@ if [[ "$PURGE" == true ]]; then
       echo "      fail2ban packages removed."
    else
       echo "      fail2ban was not installed."
+   fi
+   echo
+   echo "[5/5] Removing /etc/fail2ban/ (leftover config)..."
+   if [[ -d /etc/fail2ban ]]; then
+      rm -rf /etc/fail2ban
+      echo "      /etc/fail2ban/ removed."
+   else
+      echo "      /etc/fail2ban/ already removed."
    fi
 else
    echo "[3/4] Restarting fail2ban..."
