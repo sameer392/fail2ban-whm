@@ -33,11 +33,11 @@ if ! rpm -q fail2ban-server &>/dev/null; then
    fi
    echo "      fail2ban installed."
 else
-   echo "[1/6] fail2ban already installed."
+   echo "[1/7] fail2ban already installed."
 fi
 
 # 2. Deploy config
-echo "[2/6] Deploying config to /etc/fail2ban/..."
+echo "[2/7] Deploying config to /etc/fail2ban/..."
 cp -f "$CONFIG_DIR/filter.d/"*.conf /etc/fail2ban/filter.d/
 cp -f "$CONFIG_DIR/jail.d/"*.conf /etc/fail2ban/jail.d/
 [ -f "$CONFIG_DIR/action.d/csf-domain.conf" ] && cp -f "$CONFIG_DIR/action.d/csf-domain.conf" /etc/fail2ban/action.d/
@@ -49,16 +49,31 @@ mkdir -p /etc/fail2ban/scripts
 [ -f "$CONFIG_DIR/scripts/update-ip2location.sh" ] && cp -f "$CONFIG_DIR/scripts/update-ip2location.sh" /etc/fail2ban/scripts/ && chmod +x /etc/fail2ban/scripts/update-ip2location.sh
 echo "      Config deployed."
 
-# 3. Setup IP2Location (country lookup for ignore-countries)
-echo "[3/6] Setting up IP2Location LITE DB1..."
+# 3. Install libmaxminddb (for IP2Location country lookup via mmdblookup)
+echo "[3/7] Installing libmaxminddb (if not installed)..."
+if ! command -v mmdblookup &>/dev/null; then
+   if command -v dnf &>/dev/null; then
+      dnf install -y libmaxminddb libmaxminddb-utils 2>/dev/null || { echo "      Warning: dnf install libmaxminddb failed; run manually if needed."; }
+   elif command -v yum &>/dev/null; then
+      yum install -y libmaxminddb libmaxminddb-utils 2>/dev/null || { echo "      Warning: yum install libmaxminddb failed; run manually if needed."; }
+   else
+      echo "      Install manually: dnf install libmaxminddb libmaxminddb-utils"
+   fi
+   command -v mmdblookup &>/dev/null && echo "      libmaxminddb installed."
+else
+   echo "      libmaxminddb already installed."
+fi
+
+# 4. Setup IP2Location (country lookup for ignore-countries)
+echo "[4/7] Setting up IP2Location LITE DB1..."
 if [ -f "$CONFIG_DIR/scripts/setup-ip2location.sh" ]; then
    "$CONFIG_DIR/scripts/setup-ip2location.sh" || echo "      IP2Location setup skipped or failed; ip-api.com fallback will be used."
 else
    echo "      setup-ip2location.sh not found; run manually if needed."
 fi
 
-# 4. Verify domlog path (informational)
-echo "[4/6] Verifying domlog path..."
+# 5. Verify domlog path (informational)
+echo "[5/7] Verifying domlog path..."
 if ls /usr/local/apache/domlogs/*/* &>/dev/null 2>&1; then
    echo "      Domlog path OK: /usr/local/apache/domlogs/*/*"
 else
@@ -74,8 +89,8 @@ systemctl restart fail2ban
 sleep 3
 echo "      fail2ban enabled and restarted."
 
-# 6. Status
-echo "[6/6] Status:"
+# 7. Status
+echo "[7/7] Status:"
 echo
 fail2ban-client status
 echo
