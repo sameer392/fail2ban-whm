@@ -40,6 +40,15 @@ if [ "$SCRIPT_SRC" != "$INSTALL_DIR" ]; then
             bn=$(basename "$f")
             copy_if_changed "$f" "$INSTALL_DIR/$d/$bn" && updated=1
          done
+         # whm-plugin/plugin/ subdirectory (contains index.php, etc.)
+         if [ "$d" = "whm-plugin" ] && [ -d "$SCRIPT_SRC/$d/plugin" ]; then
+            mkdir -p "$INSTALL_DIR/$d/plugin"
+            for f in "$SCRIPT_SRC/$d/plugin"/*; do
+               [ -f "$f" ] || continue
+               bn=$(basename "$f")
+               copy_if_changed "$f" "$INSTALL_DIR/$d/plugin/$bn" && updated=1
+            done
+         fi
       fi
    done
    for f in install.sh setup.sh uninstall.sh restore-backup.sh update-whitelist.sh status.sh whitelist-ips.conf fail2ban-logrotate; do
@@ -126,17 +135,18 @@ echo "      fail2ban enabled and restarted."
 
 # 7. Install/update WHM plugin (if cPanel present)
 echo "[7/8] Installing WHM plugin..."
-WHM_PLUGIN_SRC="$CONFIG_DIR/whm-plugin/plugin"
-WHM_PLUGIN_DST="/usr/local/cpanel/whostmgr/docroot/cgi/fail2ban_manager"
-if [ -d "$WHM_PLUGIN_SRC" ] && [ -f "$WHM_PLUGIN_SRC/index.php" ]; then
-   mkdir -p "$WHM_PLUGIN_DST"
-   cp -f "$WHM_PLUGIN_SRC/index.php" "$WHM_PLUGIN_SRC/fail2ban_manager.png" "$WHM_PLUGIN_DST/"
-   chmod 755 "$WHM_PLUGIN_DST/index.php"
-   [ -f "$WHM_PLUGIN_DST/fail2ban_manager.png" ] && chmod 644 "$WHM_PLUGIN_DST/fail2ban_manager.png"
+# Use SCRIPT_SRC so running install.sh from source deploys plugin via install-whm-plugin.sh (same as setup.sh)
+WHM_PLUGIN_DIR="$SCRIPT_SRC/whm-plugin"
+if [ -x "$WHM_PLUGIN_DIR/install-whm-plugin.sh" ] && [ -f "$WHM_PLUGIN_DIR/plugin/index.php" ]; then
+   (cd "$WHM_PLUGIN_DIR" && ./install-whm-plugin.sh) && echo "      WHM plugin installed." || echo "      WHM plugin install failed."
+elif [ -d "$CONFIG_DIR/whm-plugin/plugin" ] && [ -f "$CONFIG_DIR/whm-plugin/plugin/index.php" ]; then
+   # Fallback: copy from CONFIG_DIR when install script not in script dir
+   WHM_PLUGIN_SRC="$CONFIG_DIR/whm-plugin/plugin"
+   mkdir -p /usr/local/cpanel/whostmgr/docroot/cgi/fail2ban_manager
+   cp -f "$WHM_PLUGIN_SRC/index.php" "$WHM_PLUGIN_SRC/fail2ban_manager.png" /usr/local/cpanel/whostmgr/docroot/cgi/fail2ban_manager/ 2>/dev/null || true
+   chmod 755 /usr/local/cpanel/whostmgr/docroot/cgi/fail2ban_manager/index.php
    [ -d /usr/local/cpanel/whostmgr/docroot/addon_plugins ] && cp -f "$WHM_PLUGIN_SRC/fail2ban_manager.png" /usr/local/cpanel/whostmgr/docroot/addon_plugins/ 2>/dev/null && chmod 644 /usr/local/cpanel/whostmgr/docroot/addon_plugins/fail2ban_manager.png
-   if [ -x /usr/local/cpanel/bin/register_appconfig ] && [ -f "$WHM_PLUGIN_SRC/fail2ban_manager.conf" ]; then
-      /usr/local/cpanel/bin/register_appconfig "$WHM_PLUGIN_SRC/fail2ban_manager.conf"
-   fi
+   [ -x /usr/local/cpanel/bin/register_appconfig ] && [ -f "$WHM_PLUGIN_SRC/fail2ban_manager.conf" ] && /usr/local/cpanel/bin/register_appconfig "$WHM_PLUGIN_SRC/fail2ban_manager.conf"
    systemctl restart cpanel 2>/dev/null || [ -x /usr/local/cpanel/scripts/restartsrv_cpsrvd ] && /usr/local/cpanel/scripts/restartsrv_cpsrvd 2>/dev/null || true
    echo "      WHM plugin installed."
 else

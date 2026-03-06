@@ -7,8 +7,9 @@
 
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INSTALL_DIR="/usr/share/fail2ban"
-[ -d "$INSTALL_DIR" ] || INSTALL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+[ -d "$INSTALL_DIR" ] || INSTALL_DIR="$SCRIPT_DIR"
 CONFIG_DIR="$INSTALL_DIR"
 
 # Check root
@@ -69,21 +70,24 @@ mkdir -p /etc/fail2ban/scripts
 echo "      Config deployed."
 
 echo "[3/4] Updating WHM plugin..."
-WHM_PLUGIN_SRC="$CONFIG_DIR/whm-plugin/plugin"
-WHM_PLUGIN_DST="/usr/local/cpanel/whostmgr/docroot/cgi/fail2ban_manager"
-if [ -d "$WHM_PLUGIN_SRC" ] && [ -f "$WHM_PLUGIN_SRC/index.php" ]; then
-   mkdir -p "$WHM_PLUGIN_DST"
-   cp -f "$WHM_PLUGIN_SRC/index.php" "$WHM_PLUGIN_SRC/fail2ban_manager.png" "$WHM_PLUGIN_DST/"
-   chmod 755 "$WHM_PLUGIN_DST/index.php"
-   [ -f "$WHM_PLUGIN_DST/fail2ban_manager.png" ] && chmod 644 "$WHM_PLUGIN_DST/fail2ban_manager.png"
-   [ -d /usr/local/cpanel/whostmgr/docroot/addon_plugins ] && cp -f "$WHM_PLUGIN_SRC/fail2ban_manager.png" /usr/local/cpanel/whostmgr/docroot/addon_plugins/ 2>/dev/null && chmod 644 /usr/local/cpanel/whostmgr/docroot/addon_plugins/fail2ban_manager.png
-   if [ -x /usr/local/cpanel/bin/register_appconfig ] && [ -f "$WHM_PLUGIN_SRC/fail2ban_manager.conf" ]; then
-      /usr/local/cpanel/bin/register_appconfig "$WHM_PLUGIN_SRC/fail2ban_manager.conf"
-   fi
-   systemctl restart cpanel 2>/dev/null || [ -x /usr/local/cpanel/scripts/restartsrv_cpsrvd ] && /usr/local/cpanel/scripts/restartsrv_cpsrvd 2>/dev/null || true
-   echo "      WHM plugin updated."
+# Use SCRIPT_DIR so running ./setup.sh from source (e.g. /root/fail2ban) deploys latest plugin files
+WHM_PLUGIN_DIR="$SCRIPT_DIR/whm-plugin"
+if [ -x "$WHM_PLUGIN_DIR/install-whm-plugin.sh" ] && [ -f "$WHM_PLUGIN_DIR/plugin/index.php" ]; then
+   (cd "$WHM_PLUGIN_DIR" && ./install-whm-plugin.sh) || echo "      WHM plugin install failed."
 else
-   echo "      WHM plugin source not found, skipped."
+   # Fallback: copy from CONFIG_DIR if install script not in script dir
+   WHM_PLUGIN_SRC="$CONFIG_DIR/whm-plugin/plugin"
+   if [ -d "$WHM_PLUGIN_SRC" ] && [ -f "$WHM_PLUGIN_SRC/index.php" ]; then
+      mkdir -p /usr/local/cpanel/whostmgr/docroot/cgi/fail2ban_manager
+      cp -f "$WHM_PLUGIN_SRC/index.php" "$WHM_PLUGIN_SRC/fail2ban_manager.png" /usr/local/cpanel/whostmgr/docroot/cgi/fail2ban_manager/
+      chmod 755 /usr/local/cpanel/whostmgr/docroot/cgi/fail2ban_manager/index.php
+      [ -d /usr/local/cpanel/whostmgr/docroot/addon_plugins ] && cp -f "$WHM_PLUGIN_SRC/fail2ban_manager.png" /usr/local/cpanel/whostmgr/docroot/addon_plugins/ 2>/dev/null
+      [ -x /usr/local/cpanel/bin/register_appconfig ] && [ -f "$WHM_PLUGIN_SRC/fail2ban_manager.conf" ] && /usr/local/cpanel/bin/register_appconfig "$WHM_PLUGIN_SRC/fail2ban_manager.conf"
+      systemctl restart cpanel 2>/dev/null || true
+      echo "      WHM plugin updated."
+   else
+      echo "      WHM plugin source not found, skipped."
+   fi
 fi
 
 echo "[4/4] Restarting fail2ban..."
