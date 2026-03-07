@@ -536,9 +536,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action) {
         if (!is_dir($dir)) @mkdir($dir, 0755, true);
         if ((file_exists($conf) && is_writable($conf)) || (!file_exists($conf) && is_dir($dir) && is_writable($dir))) {
             if (file_put_contents($conf, $content) !== false) {
-                if (is_executable('/etc/fail2ban/scripts/apply-blacklist-countries.sh')) {
-                    exec('nohup /etc/fail2ban/scripts/apply-blacklist-countries.sh > /tmp/apply-blacklist.log 2>&1 &');
-                    $msg = 'Blacklist countries saved. Applying to CSF in background (may take 1–2 min).';
+                $apply_script = is_executable('/etc/fail2ban/scripts/apply-blacklist-countries.sh') ? '/etc/fail2ban/scripts/apply-blacklist-countries.sh' : (is_executable('/usr/share/fail2ban/scripts/apply-blacklist-countries.sh') ? '/usr/share/fail2ban/scripts/apply-blacklist-countries.sh' : '');
+                if ($apply_script) {
+                    @set_time_limit(180);
+                    $out = [];
+                    exec($apply_script . ' 2>&1', $out, $ret);
+                    $log_content = implode("\n", $out);
+                    @file_put_contents('/tmp/apply-blacklist.log', $log_content);
+                    $msg = $ret === 0 ? 'Blacklist countries saved and CSF updated.' : 'Saved; ' . $log_content;
+                    $GLOBALS['_apply_log_output'] = $log_content;
                 } else {
                     $msg = 'Blacklist countries saved. Run apply-blacklist-countries.sh to apply.';
                 }
@@ -549,9 +555,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action) {
             $msg = 'Could not write to /etc/fail2ban/scripts/';
         }
     } elseif ($action === 'apply_blacklist_countries') {
-        if (is_executable('/etc/fail2ban/scripts/apply-blacklist-countries.sh')) {
-            exec('nohup /etc/fail2ban/scripts/apply-blacklist-countries.sh > /tmp/apply-blacklist.log 2>&1 &');
-            $msg = 'Applying to CSF in background (may take 1–2 min). Log: /tmp/apply-blacklist.log';
+        $apply_script = is_executable('/etc/fail2ban/scripts/apply-blacklist-countries.sh') ? '/etc/fail2ban/scripts/apply-blacklist-countries.sh' : (is_executable('/usr/share/fail2ban/scripts/apply-blacklist-countries.sh') ? '/usr/share/fail2ban/scripts/apply-blacklist-countries.sh' : '');
+        if ($apply_script) {
+            @set_time_limit(180);
+            $out = [];
+            exec($apply_script . ' 2>&1', $out, $ret);
+            $log_content = implode("\n", $out);
+            @file_put_contents('/tmp/apply-blacklist.log', $log_content);
+            $msg = $ret === 0 ? 'Blacklist countries applied to CSF.' : implode(' ', $out);
+            $GLOBALS['_apply_log_output'] = $log_content;
         } else {
             $msg = 'apply-blacklist-countries.sh not found or not executable.';
         }
@@ -792,7 +804,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action) {
         $err = preg_match('/\b(failed|error|could not|invalid)\b/i', $msg);
         $refresh = in_array($action, ['unban', 'unban_bulk', 'unban_whitelisted']);
         $show_apply_log = in_array($action, ['save_blacklist_countries', 'apply_blacklist_countries']);
-        echo json_encode(['ok' => !$err, 'msg' => $msg, 'tab' => $current_tab, 'refresh_banned' => $refresh, 'show_apply_log' => $show_apply_log]);
+        $apply_log = isset($GLOBALS['_apply_log_output']) ? $GLOBALS['_apply_log_output'] : '';
+        echo json_encode(['ok' => !$err, 'msg' => $msg, 'tab' => $current_tab, 'refresh_banned' => $refresh, 'show_apply_log' => $show_apply_log, 'apply_log' => $apply_log]);
         exit;
     }
 }
@@ -1928,7 +1941,13 @@ document.addEventListener('DOMContentLoaded', function() {
       .then(function(data) {
         showMsg(data.msg || 'Done.', !data.ok);
         if (data.refresh_banned) refreshBannedIps();
-        if (data.show_apply_log) { showApplyBlacklistLog(true); }
+        if (data.show_apply_log) {
+          showApplyBlacklistLog(false);
+          if (data.apply_log) {
+            var el = document.getElementById('apply-blacklist-log-content');
+            if (el) { el.textContent = data.apply_log; el.scrollTop = el.scrollHeight; }
+          }
+        }
         if (isUpdate && data.ok) { window.location.href = base + '?tab=update'; return; }
       })
       .catch(function() {

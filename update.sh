@@ -89,6 +89,8 @@ mkdir -p /etc/fail2ban/scripts
 [ -f "$CONFIG_DIR/scripts/update-useragent-jails.sh" ] && cp -f "$CONFIG_DIR/scripts/update-useragent-jails.sh" /etc/fail2ban/scripts/ && chmod +x /etc/fail2ban/scripts/update-useragent-jails.sh
 [ -f "$CONFIG_DIR/scripts/update-from-github.sh" ] && cp -f "$CONFIG_DIR/scripts/update-from-github.sh" /etc/fail2ban/scripts/ && chmod +x /etc/fail2ban/scripts/update-from-github.sh
 [ -f "$CONFIG_DIR/scripts/excluded-domains.conf" ] && cp -f "$CONFIG_DIR/scripts/excluded-domains.conf" /etc/fail2ban/scripts/
+[ -f "$CONFIG_DIR/scripts/blacklist-countries.conf" ] && cp -f "$CONFIG_DIR/scripts/blacklist-countries.conf" /etc/fail2ban/scripts/
+[ -f "$CONFIG_DIR/scripts/apply-blacklist-countries.sh" ] && cp -f "$CONFIG_DIR/scripts/apply-blacklist-countries.sh" /etc/fail2ban/scripts/ && chmod +x /etc/fail2ban/scripts/apply-blacklist-countries.sh
 [ -f "$CONFIG_DIR/scripts/generate-logpath.sh" ] && cp -f "$CONFIG_DIR/scripts/generate-logpath.sh" /etc/fail2ban/scripts/ && chmod +x /etc/fail2ban/scripts/generate-logpath.sh
 [ -f "$CONFIG_DIR/fail2ban-logrotate" ] && cp -f "$CONFIG_DIR/fail2ban-logrotate" /etc/logrotate.d/fail2ban
 echo "      Config deployed."
