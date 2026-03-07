@@ -4,7 +4,7 @@
 
 ```bash
 cd /root/fail2ban
-./install.sh
+./scripts/install.sh
 ```
 
 **What it does:**
@@ -21,7 +21,7 @@ cd /root/fail2ban
 ## Config Deploy Only (fail2ban already installed)
 
 ```bash
-/usr/share/fail2ban/update.sh
+/usr/share/fail2ban/scripts/update.sh
 ```
 
 Copies filters, jails, actions, scripts, and logrotate config from `/usr/share/fail2ban/` to `/etc/fail2ban/`, updates the WHM plugin, and restarts fail2ban. Does not restart cPanel.
@@ -38,8 +38,8 @@ Downloads the release by tag from GitHub's auto-generated source archive, instal
 
 ```bash
 # Remove only custom config (keep fail2ban service)
-/usr/share/fail2ban/uninstall.sh
+/usr/share/fail2ban/scripts/uninstall.sh
 
 # Full removal: config, packages, WHM plugin, /usr/share/fail2ban/
-/usr/share/fail2ban/uninstall.sh --purge
+/usr/share/fail2ban/scripts/uninstall.sh --purge
 ```

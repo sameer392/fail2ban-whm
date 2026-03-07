@@ -63,13 +63,9 @@ if [ "$CONFIG_DIR" != "$INSTALL_DIR" ] && [ -d "$CONFIG_DIR" ]; then
       for f in "$CONFIG_DIR/$d"/*; do [ -f "$f" ] && cp -f "$f" "$INSTALL_DIR/$d/"; done
       [ "$d" = "whm-plugin" ] && [ -d "$CONFIG_DIR/whm-plugin/plugin" ] && mkdir -p "$INSTALL_DIR/whm-plugin/plugin" && for f in "$CONFIG_DIR/whm-plugin/plugin"/*; do [ -f "$f" ] && cp -f "$f" "$INSTALL_DIR/whm-plugin/plugin/"; done
    done
-   for f in install.sh update.sh uninstall.sh restore-backup.sh update-whitelist.sh status.sh; do
-      [ -f "$CONFIG_DIR/$f" ] && cp -f "$CONFIG_DIR/$f" "$INSTALL_DIR/"
-   done
    for f in whitelist-ips.conf fail2ban-logrotate; do
       [ -f "$CONFIG_DIR/$f" ] && cp -f "$CONFIG_DIR/$f" "$INSTALL_DIR/"
    done
-   chmod +x "$INSTALL_DIR"/*.sh 2>/dev/null || true
    chmod +x "$INSTALL_DIR/scripts"/*.sh 2>/dev/null || true
 fi
 

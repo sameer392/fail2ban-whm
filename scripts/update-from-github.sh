@@ -44,7 +44,6 @@ mkdir -p "$BACKUP"
 
 echo "Installing files..."
 rsync -a --exclude='.git' --exclude='whitelist-ips.conf' "$SRC/" "$INSTALL_DIR/"
-chmod +x "$INSTALL_DIR"/*.sh 2>/dev/null || true
 chmod +x "$INSTALL_DIR/scripts"/*.sh 2>/dev/null || true
 [ -f "$BACKUP/whitelist-ips.conf" ] && cp -a "$BACKUP/whitelist-ips.conf" "$INSTALL_DIR/"
 

@@ -23,7 +23,7 @@ tail -f /var/log/fail2ban.log
 ls /usr/local/apache/domlogs/*/* | head -5
 
 # Status script
-/usr/share/fail2ban/status.sh
+/usr/share/fail2ban/scripts/status.sh
 ```
 
 ---
@@ -56,7 +56,7 @@ All scripts must be run as root.
 
 ### Backup & Restore
 
-`update.sh` creates a timestamped backup in `/etc/fail2ban/backups/YYYYMMDD-HHMMSS/` before each deploy (keeps last 10). To restore: `restore-backup.sh` (latest) or `restore-backup.sh /etc/fail2ban/backups/YYYYMMDD-HHMMSS`.
+`update.sh` creates a timestamped backup in `/etc/fail2ban/backups/YYYYMMDD-HHMMSS/` before each deploy (keeps last 10). To restore: `scripts/restore-backup.sh` (latest) or `scripts/restore-backup.sh /etc/fail2ban/backups/YYYYMMDD-HHMMSS`.
 
 ---
 

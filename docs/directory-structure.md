@@ -2,12 +2,6 @@
 
 ```
 /root/fail2ban/
-├── install.sh              # Wrapper → scripts/install.sh
-├── uninstall.sh            # Wrapper → scripts/uninstall.sh
-├── update.sh               # Wrapper → scripts/update.sh
-├── status.sh               # Wrapper → scripts/status.sh
-├── update-whitelist.sh     # Wrapper → scripts/update-whitelist.sh
-├── restore-backup.sh       # Wrapper → scripts/restore-backup.sh
 ├── whitelist-ips.conf      # IP/CIDR whitelist (never banned)
 ├── fail2ban-logrotate      # Logrotate config → /etc/logrotate.d/fail2ban
 ├── README.md

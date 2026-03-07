@@ -56,9 +56,6 @@ if [ "$SCRIPT_SRC" != "$INSTALL_DIR" ]; then
    for f in install.sh update.sh uninstall.sh restore-backup.sh update-whitelist.sh status.sh; do
       [ -f "$SCRIPT_SRC/scripts/$f" ] && copy_if_changed "$SCRIPT_SRC/scripts/$f" "$INSTALL_DIR/scripts/$f" && updated=1
    done
-   for f in install.sh update.sh uninstall.sh restore-backup.sh update-whitelist.sh status.sh; do
-      [ -f "$SCRIPT_SRC/$f" ] && copy_if_changed "$SCRIPT_SRC/$f" "$INSTALL_DIR/$f" && updated=1
-   done
    for f in whitelist-ips.conf fail2ban-logrotate; do
       [ -f "$SCRIPT_SRC/$f" ] && copy_if_changed "$SCRIPT_SRC/$f" "$INSTALL_DIR/$f" && updated=1
    done
