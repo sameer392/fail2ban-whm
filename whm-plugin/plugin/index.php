@@ -1565,6 +1565,20 @@ document.addEventListener('DOMContentLoaded', function() {
     loadBannedIpsMerged(bannedPageState.page, bannedPageState.search, bannedPageState.jail_filter);
   }
 
+  // Auto-refresh Banned IPs every 60 seconds when that tab is active.
+  // Timer starts only after the previous request completes to avoid overlapping requests.
+  function scheduleNextBannedRefresh() {
+    setTimeout(function() {
+      var pane = document.getElementById('tab-banned');
+      if (pane && pane.classList.contains('active')) {
+        loadBannedIpsMerged(bannedPageState.page, bannedPageState.search, bannedPageState.jail_filter, scheduleNextBannedRefresh);
+      } else {
+        scheduleNextBannedRefresh();
+      }
+    }, 60000);
+  }
+  scheduleNextBannedRefresh();
+
   function formatRemainingBan(sec) {
     sec = Math.max(0, Math.floor(sec));
     if (sec <= 0) return 'expired';
