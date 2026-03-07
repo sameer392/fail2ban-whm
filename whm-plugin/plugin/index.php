@@ -1627,7 +1627,7 @@ document.addEventListener('DOMContentLoaded', function() {
     loadBannedIpsMerged(bannedPageState.page, bannedPageState.search, bannedPageState.jail_filter);
   }
 
-  // Auto-refresh Banned IPs every 60 seconds when that tab is active.
+  // Auto-refresh Banned IPs every 3 minutes when that tab is active.
   // Timer starts only after the previous request completes to avoid overlapping requests.
   function scheduleNextBannedRefresh() {
     setTimeout(function() {
@@ -1637,7 +1637,7 @@ document.addEventListener('DOMContentLoaded', function() {
       } else {
         scheduleNextBannedRefresh();
       }
-    }, 60000);
+    }, 180000);
   }
   scheduleNextBannedRefresh();
 
