@@ -21,8 +21,8 @@ No cPanel restart needed. Refresh WHM if the plugin does not appear.
 | **Jail settings** | Edit maxretry, findtime, bantime per jail; Save & Deploy |
 | **Banned IPs** | Table with IP, country (GeoIP), banned time; **CSF** button (runs `csf -g` in modal); click IP for log entries (up to 100); Unban; reload icon; **auto-refresh every 3 min** when tab is active |
 | **Unban** | Per-IP or "Unban all from whitelisted countries" |
-| **Ignore Countries** | Edit ISO codes; saves to ignore-countries.conf |
-| **Excluded Domains/Users** | Exclude domains or cPanel users from protection |
+| **Whitelist Countries** | Edit ISO codes; saves to ignore-countries.conf |
+| **Whitelist Domains/Users** | Exclude domains or cPanel users from protection |
 | **Whitelist IPs** | Edit whitelist-ips.conf; Save & Deploy runs update-whitelist + update |
 | **Blacklist** | Blocked organizations (always ban); multi-domain abuse threshold |
 | **Deploy** | Runs update.sh to deploy config and restart fail2ban |

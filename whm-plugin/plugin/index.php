@@ -1169,7 +1169,7 @@ if ($home_url === '//' || $home_url === './') $home_url = '../../';
 <div class="row">
   <div class="col-md-6">
     <div class="panel panel-default">
-      <div class="panel-heading">Ignore Countries</div>
+      <div class="panel-heading">Whitelist Countries</div>
       <div class="panel-body">
         <p class="text-muted">ISO codes (e.g. IN,US,GB). IPs from these countries are never banned.</p>
         <form method="post">
@@ -1199,18 +1199,18 @@ if ($home_url === '//' || $home_url === './') $home_url = '../../';
 <div class="row" style="margin-top:15px;">
   <div class="col-md-12">
     <div class="panel panel-default" style="max-width:600px;">
-      <div class="panel-heading">Excluded Domains / Users</div>
+      <div class="panel-heading">Whitelist Domains / Users</div>
       <div class="panel-body">
         <p class="text-muted">Domains and cPanel users excluded from protection. Their logs are not monitored.</p>
         <form method="post">
           <input type="hidden" name="action" value="save_excluded_domains">
           <input type="hidden" name="tab" value="whitelists">
           <div class="form-group">
-            <label>Excluded cPanel users (comma-separated)</label>
+            <label>Whitelist cPanel users (comma-separated)</label>
             <input type="text" name="excluded_users" value="<?php echo htmlspecialchars($excluded_users); ?>" class="form-control" placeholder="user1,user2">
           </div>
           <div class="form-group">
-            <label>Excluded domains (comma-separated)</label>
+            <label>Whitelist domains (comma-separated)</label>
             <input type="text" name="excluded_domains" value="<?php echo htmlspecialchars($excluded_domains); ?>" class="form-control" placeholder="example.com,cdn.example.com">
           </div>
           <button type="submit" class="btn btn-primary btn-sm">Save &amp; Deploy</button>
