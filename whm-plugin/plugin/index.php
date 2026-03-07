@@ -5,7 +5,7 @@
  * Fail2Ban Manager - WHM Plugin
  * Manage fail2ban jails, banned IPs, whitelists from WHM
  */
-define('FAIL2BAN_WHM_VERSION', '1.0.2');
+define('FAIL2BAN_WHM_VERSION', '1.0.3');
 require_once('/usr/local/cpanel/php/WHM.php');
 
 function checkacl($acl) {
@@ -1092,12 +1092,18 @@ $general_status = $gen_ret === 0 ? implode("\n", array_slice($gen_out, 0, 15)) :
 
 <?php
 $script_path = $_SERVER['SCRIPT_NAME'] ?? '/cgi/fail2ban_manager/index.php';
-$home_url = dirname(dirname($script_path)) . '/';
-if ($home_url === '//' || $home_url === './') $home_url = '../../';
+$cgi_dir = dirname(dirname($script_path));
+$whm_root = dirname($cgi_dir);
+if ($whm_root === '/' || $whm_root === '.' || $whm_root === '') {
+   $home_url = '../../';
+} else {
+   $home_url = $whm_root . '/';
+}
+$plugins_url = $home_url;
 ?>
 <ol class="breadcrumb">
   <li><a href="<?php echo htmlspecialchars($home_url); ?>">Home</a></li>
-  <li><a href="<?php echo htmlspecialchars($home_url); ?>">Plugins</a></li>
+  <li><a href="<?php echo htmlspecialchars($plugins_url); ?>">Plugins</a></li>
   <li class="active">Fail2Ban Manager <span class="text-muted" style="font-weight:normal;">v<?php echo htmlspecialchars(FAIL2BAN_WHM_VERSION); ?></span></li>
 </ol>
 
