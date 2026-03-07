@@ -5,7 +5,7 @@
  * Fail2Ban Manager - WHM Plugin
  * Manage fail2ban jails, banned IPs, whitelists from WHM
  */
-define('FAIL2BAN_WHM_VERSION', '1.0.1');
+define('FAIL2BAN_WHM_VERSION', '1.0.2');
 require_once('/usr/local/cpanel/php/WHM.php');
 
 function checkacl($acl) {
@@ -716,9 +716,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action) {
         if ($tag === '') {
             $msg = 'Invalid or missing release tag.';
         } else {
-            $script = '/usr/share/fail2ban/scripts/update-from-github.sh';
-            if (!file_exists($script) || !is_executable($script)) {
-                $msg = 'Update script not found. Install fail2ban-whm from GitHub first.';
+            $script = (file_exists('/usr/share/fail2ban/scripts/update-from-github.sh') && is_executable('/usr/share/fail2ban/scripts/update-from-github.sh'))
+                ? '/usr/share/fail2ban/scripts/update-from-github.sh'
+                : (file_exists('/etc/fail2ban/scripts/update-from-github.sh') && is_executable('/etc/fail2ban/scripts/update-from-github.sh') ? '/etc/fail2ban/scripts/update-from-github.sh' : '');
+            if ($script === '') {
+                $msg = 'Update script not found. Run update.sh first, or install fail2ban-whm from GitHub.';
             } else {
                 $out = [];
                 exec(escapeshellarg($script) . ' ' . escapeshellarg($tag) . ' 2>&1', $out, $ret);

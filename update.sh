@@ -57,6 +57,22 @@ echo "      Backup: $BKP"
 # Keep last 10 backups
 ls -dt "$BACKUP_DIR"/[0-9]*-[0-9]* 2>/dev/null | tail -n +11 | xargs -r rm -rf
 
+# When running from repo, sync source to /usr/share/fail2ban/ so update-from-github.sh is available
+if [ "$CONFIG_DIR" != "$INSTALL_DIR" ] && [ -d "$CONFIG_DIR" ]; then
+   mkdir -p "$INSTALL_DIR"
+   for d in filter.d jail.d action.d fail2ban.d scripts whm-plugin; do
+      [ -d "$CONFIG_DIR/$d" ] || continue
+      mkdir -p "$INSTALL_DIR/$d"
+      for f in "$CONFIG_DIR/$d"/*; do [ -f "$f" ] && cp -f "$f" "$INSTALL_DIR/$d/"; done
+      [ "$d" = "whm-plugin" ] && [ -d "$CONFIG_DIR/whm-plugin/plugin" ] && mkdir -p "$INSTALL_DIR/whm-plugin/plugin" && for f in "$CONFIG_DIR/whm-plugin/plugin"/*; do [ -f "$f" ] && cp -f "$f" "$INSTALL_DIR/whm-plugin/plugin/"; done
+   done
+   for f in install.sh update.sh uninstall.sh restore-backup.sh update-whitelist.sh status.sh whitelist-ips.conf fail2ban-logrotate; do
+      [ -f "$CONFIG_DIR/$f" ] && cp -f "$CONFIG_DIR/$f" "$INSTALL_DIR/"
+   done
+   chmod +x "$INSTALL_DIR"/*.sh 2>/dev/null || true
+   chmod +x "$INSTALL_DIR/scripts"/*.sh 2>/dev/null || true
+fi
+
 echo "[2/4] Deploying config to /etc/fail2ban/..."
 cp -f "$CONFIG_DIR/filter.d/"*.conf /etc/fail2ban/filter.d/
 cp -f "$CONFIG_DIR/jail.d/"*.conf /etc/fail2ban/jail.d/
