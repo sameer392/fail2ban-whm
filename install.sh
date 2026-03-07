@@ -102,5 +102,6 @@ fi
 # GitHub zip archives don't preserve execute bits; fix before running
 chmod +x "$SRC/scripts/"*.sh 2>/dev/null || true
 
+# Use 'bash' explicitly to avoid noexec on /tmp (common on servers)
 echo
-exec "$SRC/scripts/install.sh"
+exec bash "$SRC/scripts/install.sh"
