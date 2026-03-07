@@ -73,7 +73,8 @@ else
 fi
 
 echo "Downloading $TAG..."
-TMP=$(mktemp -d)
+# Use /root to avoid noexec on /tmp (common on cPanel servers); script runs as root anyway
+TMP=$(mktemp -d -p /root)
 trap "rm -rf $TMP" EXIT
 
 if command -v curl &>/dev/null; then
