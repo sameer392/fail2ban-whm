@@ -25,14 +25,5 @@ chmod 644 /usr/local/cpanel/whostmgr/docroot/addon_plugins/fail2ban_manager.png
 /usr/local/cpanel/bin/register_appconfig "$PLUGIN_DIR/fail2ban_manager.conf"
 
 echo ""
-echo "Restarting cPanel..."
-if systemctl restart cpanel 2>/dev/null; then
-   echo "cPanel restarted."
-elif [ -x /usr/local/cpanel/scripts/restartsrv_cpsrvd ]; then
-   /usr/local/cpanel/scripts/restartsrv_cpsrvd
-   echo "cPanel restarted."
-else
-   echo "Could not restart cPanel automatically. Run: systemctl restart cpanel"
-fi
-echo ""
 echo "Plugin installed. Fail2Ban Manager should appear in WHM."
+echo "(No cPanel restart needed - refresh WHM if the plugin does not appear.)"

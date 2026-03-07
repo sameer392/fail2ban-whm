@@ -16,8 +16,8 @@ Manage fail2ban jails, banned IPs, whitelists, and jail settings from the WHM we
 ```bash
 cd /root/fail2ban/whm-plugin
 ./install-whm-plugin.sh
-systemctl restart cpanel
 ```
+(No cPanel restart needed.)
 
 ## Uninstall
 
@@ -44,9 +44,9 @@ cd /root/fail2ban/whm-plugin
 
 ## Location in WHM
 
-After install and cPanel restart, the plugin appears as **Fail2Ban Manager**:
+After install, the plugin appears as **Fail2Ban Manager**:
 - In WHM **Plugins** section (left nav)
 - Via WHM search (top right)
 - Direct URL: `https://yourserver:2087/cpsessXXX/cgi/fail2ban_manager/index.php`
 
-If it doesn't appear, re-run the install script and restart cPanel again.
+If it doesn't appear, refresh WHM or re-run the install script.

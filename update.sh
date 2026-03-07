@@ -88,8 +88,7 @@ else
       chmod 755 /usr/local/cpanel/whostmgr/docroot/cgi/fail2ban_manager/index.php
       [ -d /usr/local/cpanel/whostmgr/docroot/addon_plugins ] && cp -f "$WHM_PLUGIN_SRC/fail2ban_manager.png" /usr/local/cpanel/whostmgr/docroot/addon_plugins/ 2>/dev/null
       [ -x /usr/local/cpanel/bin/register_appconfig ] && [ -f "$WHM_PLUGIN_SRC/fail2ban_manager.conf" ] && /usr/local/cpanel/bin/register_appconfig "$WHM_PLUGIN_SRC/fail2ban_manager.conf"
-      systemctl restart cpanel 2>/dev/null || true
-      echo "      WHM plugin updated."
+      echo "      WHM plugin updated (no cPanel restart needed)."
    else
       echo "      WHM plugin source not found, skipped."
    fi

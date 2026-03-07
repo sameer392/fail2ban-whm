@@ -4,8 +4,8 @@
 
 ```bash
 /usr/share/fail2ban/whm-plugin/install-whm-plugin.sh
-systemctl restart cpanel
 ```
+(No cPanel restart needed.)
 
 ## Uninstall (included in uninstall.sh --purge)
 
