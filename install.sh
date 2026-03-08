@@ -8,6 +8,9 @@
 #   # From main branch (no release needed):
 #   curl -sSL https://raw.githubusercontent.com/sameer392/fail2ban-whm/main/install.sh | bash
 #
+#   # From dev branch:
+#   curl -sSL https://raw.githubusercontent.com/sameer392/fail2ban-whm/dev/install.sh | bash -s dev
+#
 #   # With wget:
 #   wget -qO- https://raw.githubusercontent.com/sameer392/fail2ban-whm/main/install.sh | bash
 #
@@ -68,6 +71,8 @@ fi
 
 if [[ "$TAG" == "main" ]]; then
    ZIP_URL="$REPO/archive/refs/heads/main.zip"
+elif [[ "$TAG" == "dev" ]]; then
+   ZIP_URL="$REPO/archive/refs/heads/dev.zip"
 else
    ZIP_URL="$REPO/archive/refs/tags/$TAG.zip"
 fi
