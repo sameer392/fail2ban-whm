@@ -38,7 +38,6 @@
 │   ├── whitelist-countries.conf     # Countries to never ban (e.g. IN)
 │   ├── whitelist-domains.conf       # Domains/users excluded from monitoring
 │   ├── blocklist-organizations.conf
-│   ├── blacklist-countries.conf
 │   └── whitelist-ips.conf           # IP/CIDR whitelist (never banned)
 │
 └── whm-plugin/
