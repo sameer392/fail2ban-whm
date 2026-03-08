@@ -82,6 +82,8 @@ for oldconf in ignore-countries.conf blocklist-organizations.conf excluded-domai
    [ -f "/etc/fail2ban/scripts/configurations/$oldconf" ] && [ ! -f "/etc/fail2ban/conf.d/$newconf" ] && mv "/etc/fail2ban/scripts/configurations/$oldconf" "/etc/fail2ban/conf.d/$newconf" 2>/dev/null || true
 done
 [ -f "/usr/share/fail2ban/whitelist-ips.conf" ] && [ ! -f "/usr/share/fail2ban/conf.d/whitelist-ips.conf" ] && mkdir -p /usr/share/fail2ban/conf.d && mv /usr/share/fail2ban/whitelist-ips.conf /usr/share/fail2ban/conf.d/ 2>/dev/null || true
+# Remove deprecated scripts/configurations if empty (all configs moved to conf.d)
+rmdir /etc/fail2ban/scripts/configurations 2>/dev/null || true
 
 echo "[2/5] Deploying config to /etc/fail2ban/..."
 cp -f "$CONFIG_DIR/filter.d/"*.conf /etc/fail2ban/filter.d/

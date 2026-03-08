@@ -555,7 +555,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action) {
             }
         }
     } elseif ($action === 'save_excluded_domains') {
-        $conf = '/etc/fail2ban/scripts/configurations/excluded-domains.conf';
+        $conf = '/etc/fail2ban/conf.d/whitelist-domains.conf';
         $users = trim(preg_replace('/[^a-zA-Z0-9_,\s.-]/', '', $_POST['excluded_users'] ?? ''));
         $domains = trim(preg_replace('/[^a-zA-Z0-9_,\s.-]/', '', $_POST['excluded_domains'] ?? ''));
         $users = preg_replace('/[\s,]+/', ',', $users);
