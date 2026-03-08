@@ -487,9 +487,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action) {
         $val = trim($_POST['whitelist_countries'] ?? '');
         $conf = '/etc/fail2ban/conf.d/whitelist-countries.conf';
         if (file_exists($conf) && is_writable($conf)) {
-            $content = "# Countries to exclude from bans (ISO 3166-1 alpha-2 codes, comma-separated)\n# Example: IN = India, US = United States\n# Leave empty to ban all countries\nWHITELIST_COUNTRIES=" . preg_replace('/[^A-Za-z,]/', '', $val) . "\n";
+            $content = "# Whitelisted countries (never banned) - ISO 3166-1 alpha-2 codes, comma-separated\n# Example: IN = India, US = United States\n# Leave empty to ban all countries\nWHITELIST_COUNTRIES=" . preg_replace('/[^A-Za-z,]/', '', $val) . "\n";
             file_put_contents($conf, $content);
-            $msg = 'Ignore countries saved.';
+            $msg = 'Whitelist countries saved.';
         } else {
             $msg = 'Could not write whitelist-countries.conf';
         }
@@ -514,7 +514,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action) {
         $conf = '/etc/fail2ban/conf.d/blocklist-organizations.conf';
         $orgs = trim(preg_replace('/[\r\n]+/', ',', $_POST['blocked_organizations'] ?? ''));
         $threshold = max(0, min(20, (int)($_POST['multi_domain_threshold'] ?? 0)));
-        $content = "# Blocked organizations - IPs from these orgs/ISPs are ALWAYS banned\n";
+        $content = "# Blacklisted organizations - IPs from these orgs/ISPs are always banned\n";
         $content .= "# Comma-separated, case-insensitive. Examples: Microsoft, DigitalOcean, Amazon\nBLOCKED_ORGANIZATIONS=" . preg_replace('/[^a-zA-Z0-9,\s.&-]/', '', $orgs) . "\n\n";
         $content .= "# Multi-domain abuse: if IP from whitelisted country hits this many domains, ban anyway\nMULTI_DOMAIN_ABUSE_THRESHOLD=" . $threshold . "\n";
         $dir = dirname($conf);
@@ -543,7 +543,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action) {
                     @set_time_limit(180);
                     $out = [];
                     exec('csf -r 2>&1', $out, $ret);
-                    $log_content = 'CC_DENY updated. Countries blocked: ' . ($value ?: 'none') . "\n" . implode("\n", $out);
+                    $log_content = 'CC_DENY updated. Countries blacklisted: ' . ($value ?: 'none') . "\n" . implode("\n", $out);
                     @file_put_contents('/tmp/apply-blacklist.log', $log_content);
                     $msg = $ret === 0 ? 'Blacklist countries saved and CSF restarted.' : 'Saved; csf -r: ' . implode(' ', $out);
                     $GLOBALS['_apply_log_output'] = $log_content;
@@ -575,9 +575,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action) {
                 }
                 if ($ok) {
                     exec('fail2ban-client reload 2>&1', $out2, $ret);
-                    $msg = $ret === 0 ? 'Excluded domains saved and fail2ban reloaded.' : 'Saved; reload failed: ' . implode("\n", $out2);
+                    $msg = $ret === 0 ? 'Whitelist domains saved and fail2ban reloaded.' : 'Saved; reload failed: ' . implode("\n", $out2);
                 } else {
-                    $msg = 'Excluded domains saved; run update.sh to apply.';
+                    $msg = 'Whitelist domains saved; run update.sh to apply.';
                 }
             } else {
                 $msg = 'Could not write whitelist-domains.conf';
@@ -1228,7 +1228,7 @@ $plugins_url = $home_url;
     <div class="panel panel-default">
       <div class="panel-heading">Whitelist Countries</div>
       <div class="panel-body">
-        <p class="text-muted">ISO codes (e.g. IN,US,GB). IPs from these countries are never banned.</p>
+        <p class="text-muted">ISO codes (e.g. IN,US,GB). IPs from these countries are whitelisted (never banned).</p>
         <form method="post">
           <input type="hidden" name="action" value="save_ignore_countries">
           <input type="hidden" name="tab" value="whitelists">
@@ -1242,7 +1242,7 @@ $plugins_url = $home_url;
     <div class="panel panel-default">
       <div class="panel-heading">Whitelist IPs</div>
       <div class="panel-body">
-        <p class="text-muted">IPs/CIDRs excluded from bans. One per line.</p>
+        <p class="text-muted">Whitelisted IPs/CIDRs (never banned). One per line.</p>
         <form method="post">
           <input type="hidden" name="action" value="save_whitelist_ips">
           <input type="hidden" name="tab" value="whitelists">
@@ -1258,7 +1258,7 @@ $plugins_url = $home_url;
     <div class="panel panel-default" style="max-width:600px;">
       <div class="panel-heading">Whitelist Domains / Users</div>
       <div class="panel-body">
-        <p class="text-muted">Domains and cPanel users excluded from protection. Their logs are not monitored.</p>
+        <p class="text-muted">Whitelisted domains and cPanel users (excluded from monitoring). Their logs are not monitored.</p>
         <form method="post">
           <input type="hidden" name="action" value="save_excluded_domains">
           <input type="hidden" name="tab" value="whitelists">
@@ -1286,7 +1286,7 @@ $plugins_url = $home_url;
     <?php if (!$csf_conf_ok): ?>
     <div class="alert alert-warning">CSF configuration not found. Ensure CSF is installed and <code>/etc/csf/csf.conf</code> exists.</div>
     <?php else: ?>
-    <p class="text-muted">IPs from these countries are blocked at the firewall (CSF CC_DENY). Reads from and writes directly to <code>/etc/csf/csf.conf</code>.</p>
+    <p class="text-muted">IPs from blacklisted countries are blocked at the firewall (CSF CC_DENY). Reads from and writes directly to <code>/etc/csf/csf.conf</code>.</p>
     <form method="post">
       <input type="hidden" name="action" value="save_blacklist_countries">
       <input type="hidden" name="tab" value="blacklist">
@@ -1305,14 +1305,14 @@ $plugins_url = $home_url;
   </div>
 </div>
 <div class="panel panel-default" style="max-width:600px;">
-  <div class="panel-heading">Blocked Organizations &amp; Multi-Domain Abuse</div>
+  <div class="panel-heading">Blacklisted Organizations &amp; Multi-Domain Abuse</div>
   <div class="panel-body">
-    <p class="text-muted">IPs from blocked orgs (e.g. Microsoft, DigitalOcean) are always banned, even from whitelisted countries. If an IP from a whitelisted country hits many domains in short time, it is also banned.</p>
+    <p class="text-muted">IPs from blacklisted orgs (e.g. Microsoft, DigitalOcean) are always banned, even from whitelisted countries. If an IP from a whitelisted country hits many domains in short time, it is also banned.</p>
     <form method="post">
       <input type="hidden" name="action" value="save_blocklist_organizations">
       <input type="hidden" name="tab" value="blacklist">
       <div class="form-group">
-        <label>Blocked organizations (comma-separated)</label>
+        <label>Blacklisted organizations (comma-separated)</label>
         <input type="text" name="blocked_organizations" value="<?php echo htmlspecialchars($blocked_organizations); ?>" class="form-control" placeholder="Microsoft, DigitalOcean, Amazon" style="max-width:500px;">
       </div>
       <div class="form-group">
@@ -1518,7 +1518,7 @@ if (strpos($j, 'apache-ua-') === 0) continue;
         </form>
       </div>
     </div>
-    <p class="text-muted" style="margin-top:15px;font-size:12px;">Your whitelist IPs, ignore countries, and blocklist settings are preserved during update.</p>
+    <p class="text-muted" style="margin-top:15px;font-size:12px;">Your whitelist IPs, whitelist countries, and blacklist settings are preserved during update.</p>
     <p class="text-muted" style="margin-top:8px;font-size:12px;"><strong>Force re-deploy</strong> re-runs <code>update.sh</code> to deploy config and scripts from <code>/usr/share/fail2ban/</code> without downloading. Use when scripts (e.g. csf-ban.sh) need to be re-applied or after manual file changes.</p>
   </div>
 </div>

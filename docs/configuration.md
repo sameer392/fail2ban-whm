@@ -30,7 +30,7 @@
 
 ### IP Whitelist (whitelist-ips.conf)
 
-IPs/CIDRs in this file are excluded from bans. Supported: single IP, /24, /28, /29, /32.
+IPs/CIDRs in this file are whitelisted (excluded from bans). Supported: single IP, /24, /28, /29, /32.
 
 1. Edit `conf.d/whitelist-ips.conf`
 2. Run `update-whitelist.sh` – regenerates filter ignoreregex
@@ -73,7 +73,7 @@ Edit via WHM → Whitelists → Excluded Domains/Users. After saving, run `updat
 
 ---
 
-### Organization Lookup (for WHM display and blocked-orgs)
+### Organization Lookup (for WHM display and blacklisted-orgs)
 
 Organization (Microsoft, DigitalOcean, etc.) is shown in the Banned IPs table. Lookup order:
 1. SQLite cache (local)

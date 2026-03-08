@@ -29,7 +29,7 @@ if grep -q '^CC_DENY = ' "$CSF_CONF" 2>/dev/null; then
         sed -i "s|^CC_DENY = .*|CC_DENY = \"\"|" "$CSF_CONF"
     fi
     csf -r &>/dev/null || true
-    echo "CSF CC_DENY updated. Countries blocked: ${VALUE:-none}"
+    echo "CSF CC_DENY updated. Countries blacklisted: ${VALUE:-none}"
 else
     echo "CC_DENY not found in $CSF_CONF"
 fi
