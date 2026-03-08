@@ -35,7 +35,7 @@ unzip -q release.zip
 SRC=$(ls -1d */ 2>/dev/null | head -1 | tr -d '/')
 [ -d "$SRC" ] || { echo "Unexpected archive structure"; exit 1; }
 
-echo "Backing up user configs..."
+echo "Backing up user configs (conf.d - preserved across update)..."
 BACKUP="$TMP_DIR/backup"
 mkdir -p "$BACKUP"
 # New layout (conf.d)

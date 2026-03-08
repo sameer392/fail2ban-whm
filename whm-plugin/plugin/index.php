@@ -5,7 +5,7 @@
  * Fail2Ban Manager - WHM Plugin
  * Manage fail2ban jails, banned IPs, whitelists from WHM
  */
-define('FAIL2BAN_WHM_VERSION', '1.0.3');
+define('FAIL2BAN_WHM_VERSION', '1.0.4');
 require_once('/usr/local/cpanel/php/WHM.php');
 
 function checkacl($acl) {
