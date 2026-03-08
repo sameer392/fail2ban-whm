@@ -37,6 +37,14 @@ Works without creating a release.
 curl -sSL https://raw.githubusercontent.com/sameer392/fail2ban-whm/main/install.sh | bash
 ```
 
+### One-liner install (dev branch)
+
+Use development version.
+
+```bash
+curl -sSL https://raw.githubusercontent.com/sameer392/fail2ban-whm/dev/install.sh | bash -s dev
+```
+
 ### Install a specific version
 
 ```bash
