@@ -3,6 +3,7 @@
 # Usage: ./update-from-github.sh <tag>
 #   e.g. ./update-from-github.sh v1.0.1
 # Uses GitHub's auto-generated source archive (archive/refs/tags/<tag>.zip).
+# Mirrors bootstrap install flow: extract, deploy, WHM plugin, restart.
 # Run as root.
 
 set -e
@@ -10,7 +11,8 @@ TAG="${1:?Usage: $0 <tag>}"
 INSTALL_DIR="/usr/share/fail2ban"
 REPO_URL="https://github.com/sameer392/fail2ban-whm"
 ZIP_URL="$REPO_URL/archive/refs/tags/$TAG.zip"
-TMP_DIR=$(mktemp -d)
+# Use /root to avoid noexec on /tmp (common on cPanel)
+TMP_DIR=$(mktemp -d -p /root)
 trap "rm -rf $TMP_DIR" EXIT
 
 [ "$EUID" -eq 0 ] || { echo "Run as root"; exit 1; }
@@ -64,5 +66,8 @@ for f in "$BACKUP"/*.conf; do [ -f "$f" ] && cp -a "$f" /etc/fail2ban/conf.d/ 2>
 
 echo "Installing WHM plugin..."
 [ -x "$INSTALL_DIR/whm-plugin/install-whm-plugin.sh" ] && (cd "$INSTALL_DIR/whm-plugin" && ./install-whm-plugin.sh) || true
+
+# Explicit cleanup (trap also runs on exit; ensures temp removed when invoked from PHP/WHM)
+rm -rf "$TMP_DIR" 2>/dev/null || true
 
 echo "Update complete: $TAG"

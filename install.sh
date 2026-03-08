@@ -104,5 +104,9 @@ fi
 chmod +x "$SRC/scripts/"*.sh 2>/dev/null || true
 
 # Use 'bash' explicitly to avoid noexec on /tmp (common on servers)
+# Do not use exec - trap must run to clean up TMP on exit
 echo
-exec bash "$SRC/scripts/install.sh"
+bash "$SRC/scripts/install.sh"
+ret=$?
+rm -rf "$TMP" 2>/dev/null || true
+exit $ret
