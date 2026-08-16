@@ -5,7 +5,7 @@
  * Fail2Ban Manager - WHM Plugin
  * Manage fail2ban jails, banned IPs, whitelists from WHM
  */
-define('FAIL2BAN_WHM_VERSION', '1.0.4');
+define('FAIL2BAN_WHM_VERSION', '1.0.5');
 require_once('/usr/local/cpanel/php/WHM.php');
 
 function checkacl($acl) {
@@ -396,6 +396,31 @@ function save_loglevel($level) {
     return true;
 }
 
+function get_ipv6_enabled() {
+    $f = '/etc/fail2ban/conf.d/ipv6.conf';
+    if (!is_readable($f)) return false;
+    $c = file_get_contents($f);
+    return (bool)preg_match('/^\s*ENABLE_IPV6\s*=\s*1\b/m', $c);
+}
+
+function save_ipv6_enabled($on) {
+    $val = $on ? '1' : '0';
+    $content = "# Optional IPv6 banning via Fail2Ban + CSF\n# 0 = IPv4 only, 1 = also ban IPv6 (requires CSF IPV6 = 1)\nENABLE_IPV6=$val\n";
+    foreach (['/etc/fail2ban/conf.d/ipv6.conf', '/usr/share/fail2ban/conf.d/ipv6.conf'] as $p) {
+        $dir = dirname($p);
+        if (!is_dir($dir)) @mkdir($dir, 0755, true);
+        if (is_dir($dir) && is_writable($dir)) @file_put_contents($p, $content);
+    }
+    $out = [];
+    if (is_executable('/etc/fail2ban/scripts/apply-ipv6-mode.sh')) {
+        exec('/etc/fail2ban/scripts/apply-ipv6-mode.sh 2>&1', $out, $ret);
+    } elseif (is_executable('/usr/share/fail2ban/scripts/apply-ipv6-mode.sh')) {
+        exec('/usr/share/fail2ban/scripts/apply-ipv6-mode.sh 2>&1', $out, $ret);
+    }
+    exec('fail2ban-client reload 2>&1');
+    return true;
+}
+
 function get_jail_settings($jail) {
     $jail = preg_replace('/[^a-zA-Z0-9_-]/', '', $jail);
     $paths = ['/usr/share/fail2ban/jail.d/' . $jail . '.conf', '/etc/fail2ban/jail.d/' . $jail . '.conf'];
@@ -480,7 +505,7 @@ $action = $_POST['action'] ?? $_GET['action'] ?? '';
 $current_tab = $_GET['tab'] ?? $_POST['tab'] ?? 'dashboard';
 $valid_tabs = ['dashboard' => 'Dashboard', 'banned' => 'Banned IPs', 'whitelists' => 'Whitelists', 'blacklist' => 'Blacklist', 'notifications' => 'Notifications', 'settings' => 'Settings', 'update' => 'Update'];
 if (!isset($valid_tabs[$current_tab])) $current_tab = 'dashboard';
-$tab_from_action = ['save_ignore_countries' => 'whitelists', 'save_whitelist_ips' => 'whitelists', 'save_blocklist_organizations' => 'blacklist', 'save_blacklist_countries' => 'blacklist', 'save_excluded_domains' => 'whitelists', 'save_email_alerts' => 'notifications', 'save_loglevel' => 'settings', 'deploy' => 'settings', 'force_redeploy' => 'update', 'update_ip2location' => 'settings', 'save_ip2location_token' => 'settings', 'setup_ip2location_asn' => 'settings', 'unban' => 'banned', 'unban_bulk' => 'banned', 'unban_whitelisted' => 'banned', 'save_jail_settings' => 'settings', 'do_update' => 'update'];
+$tab_from_action = ['save_ignore_countries' => 'whitelists', 'save_whitelist_ips' => 'whitelists', 'save_blocklist_organizations' => 'blacklist', 'save_blacklist_countries' => 'blacklist', 'save_excluded_domains' => 'whitelists', 'save_email_alerts' => 'notifications', 'save_loglevel' => 'settings', 'save_ipv6' => 'settings', 'deploy' => 'settings', 'force_redeploy' => 'update', 'update_ip2location' => 'settings', 'save_ip2location_token' => 'settings', 'setup_ip2location_asn' => 'settings', 'unban' => 'banned', 'unban_bulk' => 'banned', 'unban_whitelisted' => 'banned', 'save_jail_settings' => 'settings', 'do_update' => 'update'];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action) {
     if ($action === 'save_ignore_countries') {
@@ -617,7 +642,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action) {
         $ip = preg_replace('/[^0-9a-fA-F.:]/', '', $_POST['ip'] ?? '');
         $jail = preg_replace('/[^a-zA-Z0-9_-]/', '', $_POST['jail'] ?? 'wordpress-wp-login');
         if ($ip && $jail) {
-            exec("fail2ban-client set $jail unbanip $ip 2>&1", $out, $ret);
+            exec("fail2ban-client set " . escapeshellarg($jail) . " unbanip " . escapeshellarg($ip) . " 2>&1", $out, $ret);
             $msg = $ret === 0 ? "Unbanned $ip from $jail" : implode("\n", $out);
         }
     } elseif ($action === 'unban_bulk') {
@@ -630,7 +655,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action) {
                     $ip = preg_replace('/[^0-9a-fA-F.:]/', '', $parts[0]);
                     $jail = preg_replace('/[^a-zA-Z0-9_-]/', '', $parts[1]);
                     if ($ip && $jail && in_array($jail, $jails)) {
-                        exec("fail2ban-client set $jail unbanip $ip 2>&1", $out, $ret);
+                        exec("fail2ban-client set " . escapeshellarg($jail) . " unbanip " . escapeshellarg($ip) . " 2>&1", $out, $ret);
                         if ($ret === 0) $unbanned++;
                     }
                 }
@@ -643,7 +668,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action) {
                 foreach ($ips as $ip) {
                     $ip = preg_replace('/[^0-9a-fA-F.:]/', '', $ip);
                     if ($ip) {
-                        exec("fail2ban-client set $jail unbanip $ip 2>&1", $out, $ret);
+                        exec("fail2ban-client set " . escapeshellarg($jail) . " unbanip " . escapeshellarg($ip) . " 2>&1", $out, $ret);
                         if ($ret === 0) $unbanned++;
                     }
                 }
@@ -727,6 +752,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action) {
         } else {
             $msg = "Invalid log level.";
         }
+    } elseif ($action === 'save_ipv6') {
+        $on = isset($_POST['enable_ipv6']) && $_POST['enable_ipv6'] === '1';
+        save_ipv6_enabled($on);
+        $msg = $on ? 'IPv6 banning enabled. Fail2Ban will ban IPv6 attackers via CSF.' : 'IPv6 banning disabled. Fail2Ban will ignore IPv6 (IPv4 only).';
     } elseif ($action === 'save_email_alerts') {
         $conf = '/etc/fail2ban/conf.d/email-alerts.conf';
         $scripts_dir = '/etc/fail2ban/scripts';
@@ -855,6 +884,7 @@ function is_geoip_ready() {
 $geoip_ready = is_geoip_ready();
 $bans_24h = get_bans_last_24h();
 $current_loglevel = get_current_loglevel();
+$ipv6_enabled = get_ipv6_enabled();
 $email_conf = file_exists('/etc/fail2ban/conf.d/email-alerts.conf') ? '/etc/fail2ban/conf.d/email-alerts.conf' : '/etc/fail2ban/scripts/configurations/email-alerts.conf';
 $email_alerts_enabled = false;
 $email_alerts_to = '';
@@ -1242,7 +1272,7 @@ $plugins_url = $home_url;
     <div class="panel panel-default">
       <div class="panel-heading">Whitelist IPs</div>
       <div class="panel-body">
-        <p class="text-muted">Whitelisted IPs/CIDRs (never banned). One per line.</p>
+        <p class="text-muted">Whitelisted IPs/CIDRs (never banned). One per line. IPv6 prefixes are supported when IPv6 banning is enabled (e.g. <code>2604:4300:a:2ef::/64</code>).</p>
         <form method="post">
           <input type="hidden" name="action" value="save_whitelist_ips">
           <input type="hidden" name="tab" value="whitelists">
@@ -1419,6 +1449,20 @@ if (strpos($j, 'apache-ua-') === 0) continue;
   </div>
 </div>
 <?php endforeach; ?>
+<div class="panel panel-default">
+  <div class="panel-heading">IPv6 banning (optional)</div>
+  <div class="panel-body">
+    <p class="text-muted">Off by default so IPv4-only servers are unchanged. Enable on servers that have a public IPv6 address and CSF IPv6 enabled. When on, Fail2Ban will ban IPv6 attackers in CSF the same way as IPv4. Add your server IPv6 prefix to Whitelist IPs (e.g. <code>2604:4300:a:2ef::/64</code>).</p>
+    <form method="post" class="form-inline">
+      <input type="hidden" name="action" value="save_ipv6">
+      <input type="hidden" name="tab" value="settings">
+      <label class="checkbox-inline" style="margin-right:12px;">
+        <input type="checkbox" name="enable_ipv6" value="1"<?php echo $ipv6_enabled ? ' checked' : ''; ?>> Enable IPv6 banning
+      </label>
+      <button type="submit" class="btn btn-primary btn-sm">Save &amp; apply</button>
+    </form>
+  </div>
+</div>
 <div class="row">
   <div class="col-md-6">
     <div class="panel panel-default">

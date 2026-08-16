@@ -19,6 +19,20 @@ CRAWLER_REGEX='^66\.249\.|^2a03:2880|^173\.208\.207\.|^40\.77\.|^207\.46\.|googl
 
 cidr_to_regex() {
     local entry="$1"
+    # IPv6 (optional): prefix match. /64 → first 4 hextets; else exact address.
+    if [[ "$entry" == *:* ]]; then
+        local ip="${entry%%/*}"
+        local cidr="${entry##*/}"
+        [ "$ip" = "$entry" ] && cidr=128
+        if [ "$cidr" -le 64 ] 2>/dev/null; then
+            local pfx
+            pfx=$(echo "$ip" | awk -F: '{printf "%s:%s:%s:%s:", $1,$2,$3,$4}')
+            echo "^${pfx}"
+        else
+            echo "^${ip}"
+        fi
+        return
+    fi
     if [[ "$entry" == */* ]]; then
         local ip="${entry%%/*}"
         local cidr="${entry##*/}"

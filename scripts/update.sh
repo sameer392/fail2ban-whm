@@ -92,9 +92,11 @@ cp -f "$CONFIG_DIR/jail.d/"*.conf /etc/fail2ban/jail.d/
 [ -f "$CONFIG_DIR/fail2ban.d/loglevel-verbose.conf" ] && cp -f "$CONFIG_DIR/fail2ban.d/loglevel-verbose.conf" /etc/fail2ban/fail2ban.d/
 mkdir -p /etc/fail2ban/scripts
 [ -f "$CONFIG_DIR/scripts/csf-ban.sh" ] && cp -f "$CONFIG_DIR/scripts/csf-ban.sh" /etc/fail2ban/scripts/ && chmod +x /etc/fail2ban/scripts/csf-ban.sh
+[ -f "$CONFIG_DIR/scripts/apply-ipv6-mode.sh" ] && cp -f "$CONFIG_DIR/scripts/apply-ipv6-mode.sh" /etc/fail2ban/scripts/ && chmod +x /etc/fail2ban/scripts/apply-ipv6-mode.sh
+[ -x /etc/fail2ban/scripts/apply-ipv6-mode.sh ] && /etc/fail2ban/scripts/apply-ipv6-mode.sh || true
 mkdir -p /etc/fail2ban/conf.d
 # User configs (conf.d): copy only if not exists - preserve user settings across updates
-for _c in whitelist-countries.conf blocklist-organizations.conf whitelist-domains.conf whitelist-ips.conf; do
+for _c in whitelist-countries.conf blocklist-organizations.conf whitelist-domains.conf whitelist-ips.conf ipv6.conf; do
    [ -f "$CONFIG_DIR/conf.d/$_c" ] && [ ! -f "/etc/fail2ban/conf.d/$_c" ] && cp -f "$CONFIG_DIR/conf.d/$_c" /etc/fail2ban/conf.d/
 done
 [ -f "$CONFIG_DIR/scripts/setup-ip2location.sh" ] && cp -f "$CONFIG_DIR/scripts/setup-ip2location.sh" /etc/fail2ban/scripts/ && chmod +x /etc/fail2ban/scripts/setup-ip2location.sh

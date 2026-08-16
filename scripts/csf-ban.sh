@@ -15,9 +15,24 @@ DOMLOGS="${DOMLOGS:-/usr/local/apache/domlogs}"
 
 [ -z "$IP" ] || [ -z "$JAIL" ] && exit 1
 
-# Skip private/local IPs
+# Skip private/local IPv4
 [[ "$IP" =~ ^(127\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.) ]] && exit 0
-[[ "$IP" =~ ^(::1|fc00:|fe80:) ]] && exit 0
+# Skip loopback, link-local, ULA, IPv4-mapped IPv6
+[[ "$IP" == "::1" ]] && exit 0
+[[ "$IP" == fe80:* || "$IP" == FE80:* ]] && exit 0
+[[ "$IP" == fc* || "$IP" == fd* || "$IP" == FC* || "$IP" == FD* ]] && exit 0
+[[ "$IP" == ::ffff:* || "$IP" == ::FFFF:* ]] && exit 0
+
+# Optional IPv6: skip unless ENABLE_IPV6=1 (IPv4-only servers stay IPv4)
+if [[ "$IP" == *:* ]]; then
+    ENABLE_IPV6=0
+    [ -f /etc/fail2ban/conf.d/ipv6.conf ] && . /etc/fail2ban/conf.d/ipv6.conf
+    [ "${ENABLE_IPV6:-0}" != "1" ] && exit 0
+fi
+
+urlencode_ip() {
+    python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1], safe=""))' "$1" 2>/dev/null || printf '%s' "$1"
+}
 
 # Country whitelist applies ONLY to apache-high-volume; all other jails always ban
 [[ "$JAIL" == apache-high-volume ]] && SKIP_WHITELIST=0 || SKIP_WHITELIST=1
@@ -26,7 +41,8 @@ DOMLOGS="${DOMLOGS:-/usr/local/apache/domlogs}"
 DOMAINS=""
 DOMAIN_COUNT=0
 if [ -d "$DOMLOGS" ]; then
-    DOMAINS=$(grep -lE "^${IP} " "$DOMLOGS"/*/* 2>/dev/null | while read -r f; do
+    IP_ESC=$(printf '%s' "$IP" | sed 's/[.[\*^$]/\\&/g')
+    DOMAINS=$(grep -lE "^${IP_ESC} " "$DOMLOGS"/*/* 2>/dev/null | while read -r f; do
         basename "$f" | sed 's/-ssl_log$//'
     done | sort -u | tr '\n' ',' | sed 's/,$//; s/,/, /g')
     [ -n "$DOMAINS" ] && DOMAIN_COUNT=$(echo "$DOMAINS" | tr ',' '\n' | wc -l)
@@ -54,7 +70,7 @@ if [ "$SKIP_WHITELIST" != "1" ] && [ -n "$WHITELIST_COUNTRIES" ]; then
     done
     # Fallback: ip-api.com (free, no key, ~45 req/min limit)
     if [ -z "$COUNTRY" ] && command -v curl &>/dev/null; then
-        COUNTRY=$(curl -s --connect-timeout 2 --max-time 4 "http://ip-api.com/json/${IP}?fields=countryCode" 2>/dev/null | grep -o '"countryCode":"[A-Z]*"' | cut -d'"' -f4)
+        COUNTRY=$(curl -s --connect-timeout 2 --max-time 4 "http://ip-api.com/json/$(urlencode_ip "$IP")?fields=countryCode" 2>/dev/null | grep -o '"countryCode":"[A-Z]*"' | cut -d'"' -f4)
     fi
     if [ -n "$COUNTRY" ]; then
         IS_WHITELISTED=0
@@ -88,7 +104,7 @@ if [ "$SKIP_WHITELIST" != "1" ] && [ -n "$WHITELIST_COUNTRIES" ]; then
                 fi
                 # Fallback: ip-api.com
                 if [ -z "$ORG" ] && command -v curl &>/dev/null; then
-                    ORG_RAW=$(curl -s --connect-timeout 2 --max-time 4 "http://ip-api.com/json/${IP}?fields=org,isp" 2>/dev/null)
+                    ORG_RAW=$(curl -s --connect-timeout 2 --max-time 4 "http://ip-api.com/json/$(urlencode_ip "$IP")?fields=org,isp" 2>/dev/null)
                     ORG=$(echo "$ORG_RAW" | grep -oE '"(org|isp)":"[^"]*"' | cut -d'"' -f4 | tr '\n' ' ')
                 fi
                 for bl in $(echo "$BLOCKED_ORGANIZATIONS" | tr ',' ' '); do
