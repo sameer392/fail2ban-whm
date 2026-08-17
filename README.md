@@ -7,7 +7,7 @@ A complete fail2ban configuration for cPanel/WHM servers that blocks WordPress b
 | Feature | Description |
 |---------|-------------|
 | **wordpress-wp-login** | Blocks wp-login.php brute force (5+ requests in 5 min) |
-| **apache-high-volume** | Blocks high-volume traffic (100+ requests in 10 min, excludes crawlers) |
+| **apache-high-volume** | Blocks high-volume traffic (100+ non-CMS requests in 10 min; excludes crawlers and WordPress admin/static assets) |
 | **CSF integration** | Bans via CSF with jail name and affected domain(s) in comment |
 | **Country whitelist** | Skip banning IPs from specified countries (e.g. India, US) |
 | **IP whitelist** | Exclude trusted IPs/CIDRs from bans |

@@ -541,7 +541,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action) {
         $threshold = max(0, min(20, (int)($_POST['multi_domain_threshold'] ?? 0)));
         $content = "# Blacklisted organizations - IPs from these orgs/ISPs are always banned\n";
         $content .= "# Comma-separated, case-insensitive. Examples: Microsoft, DigitalOcean, Amazon\nBLOCKED_ORGANIZATIONS=" . preg_replace('/[^a-zA-Z0-9,\s.&-]/', '', $orgs) . "\n\n";
-        $content .= "# Multi-domain abuse: if IP from whitelisted country hits this many domains, ban anyway\nMULTI_DOMAIN_ABUSE_THRESHOLD=" . $threshold . "\n";
+        $content .= "# Multi-domain abuse: if IP from whitelisted country has recent non-CMS (scanner) hits on this many domains, ban anyway\nMULTI_DOMAIN_ABUSE_THRESHOLD=" . $threshold . "\n";
         $dir = dirname($conf);
         if (!is_dir($dir)) @mkdir($dir, 0755, true);
         if ((file_exists($conf) && is_writable($conf)) || (!file_exists($conf) && is_dir($dir) && is_writable($dir))) {
@@ -1337,7 +1337,7 @@ $plugins_url = $home_url;
 <div class="panel panel-default" style="max-width:600px;">
   <div class="panel-heading">Blacklisted Organizations &amp; Multi-Domain Abuse</div>
   <div class="panel-body">
-    <p class="text-muted">IPs from blacklisted orgs (e.g. Microsoft, DigitalOcean) are always banned, even from whitelisted countries. If an IP from a whitelisted country hits many domains in short time, it is also banned.</p>
+    <p class="text-muted">IPs from blacklisted orgs (e.g. Microsoft, DigitalOcean) are always banned, even from whitelisted countries. If an IP from a whitelisted country scans many domains in a short time (non-WordPress-admin traffic), it is also banned. Site owners editing several WP sites from one IP are not counted.</p>
     <form method="post">
       <input type="hidden" name="action" value="save_blocklist_organizations">
       <input type="hidden" name="tab" value="blacklist">
@@ -1347,7 +1347,7 @@ $plugins_url = $home_url;
       </div>
       <div class="form-group">
         <label>Multi-domain abuse threshold</label>
-        <input type="number" name="multi_domain_threshold" value="<?php echo (int)$multi_domain_threshold; ?>" min="0" max="20" class="form-control" style="width:80px;" title="Ban whitelisted-country IPs that hit this many domains">
+        <input type="number" name="multi_domain_threshold" value="<?php echo (int)$multi_domain_threshold; ?>" min="0" max="20" class="form-control" style="width:80px;" title="Ban whitelisted-country IPs that scan this many domains (wp-admin traffic ignored)">
         <span class="text-muted" style="margin-left:8px;">(0 = disabled)</span>
       </div>
       <button type="submit" class="btn btn-primary btn-sm">Save</button>

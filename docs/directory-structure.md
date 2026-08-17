@@ -9,11 +9,11 @@
 │
 ├── filter.d/               # Fail2ban filters
 │   ├── wordpress-wp-login.conf    # Match wp-login.php requests
-│   └── apache-high-volume.conf   # Match all requests, exclude crawlers
+│   └── apache-high-volume.conf   # Match requests; exclude crawlers + WP admin/static
 │
 ├── jail.d/                 # Jail definitions
 │   ├── wordpress-wp-login.conf   # 5 hits / 5 min → 1 hr ban
-│   └── apache-high-volume.conf  # 100 hits / 10 min → 1 hr ban
+│   └── apache-high-volume.conf  # 100 counted hits / 10 min → 1 hr ban
 │
 ├── action.d/
 │   └── csf-domain.conf     # Ban via CSF with domain comment
