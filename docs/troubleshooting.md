@@ -23,8 +23,8 @@ Use `fail2ban-client` for management. There is no standalone `fail2ban` command.
 
 ## High-volume jail caution
 
-The apache-high-volume jail ignores WordPress admin, REST API, plugin/theme assets, and static files, so CMS editors are not counted. Scrapers hitting HTML/PHP pages are still banned. API clients or CDNs that request many non-static URLs may still be affected. To disable: set `enabled = false` in `jail.d/apache-high-volume.conf` and run update.sh.
+CMS/editor paths (wp-admin, REST, static files, etc.) are configured in WHM → Whitelists → CMS / Editor paths and apply only to the country codes on each rule. Other countries are still counted and can be banned. API clients or CDNs that request many non-static URLs may still be affected. To disable the jail: set `enabled = false` in `jail.d/apache-high-volume.conf` and run update.sh.
 
 ## WordPress site owner banned (timeout to wp-admin)
 
-If a client IP from a whitelisted country was banned while editing several sites, check that `apache-high-volume` filter ignoreregex includes `wp-admin` and that `csf-ban.sh` uses scanner-domain counting (recent non-CMS hits). Unban with `csf -dr <ip>` and `fail2ban-client set apache-high-volume unbanip <ip>`.
+Check WHM → Whitelists → CMS / Editor paths: the path (e.g. `wp-admin`) must be enabled and the client's country code listed. Unban with `csf -dr <ip>` and `fail2ban-client set apache-high-volume unbanip <ip>`.

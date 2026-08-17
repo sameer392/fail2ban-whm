@@ -34,32 +34,8 @@ urlencode_ip() {
     python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1], safe=""))' "$1" 2>/dev/null || printf '%s' "$1"
 }
 
-# WordPress editor / static-asset paths. Site owners working in wp-admin (often
-# across several domains) must not be treated as multi-domain scrapers.
-WP_EDITOR_RE='wp-admin|wp-includes|wp-content/|wp-json/|admin-ajax\.php|wp-cron\.php|load-styles\.php|load-scripts\.php|\.(css|js|mjs|map|png|jpe?g|gif|svg|webp|ico|woff2?|ttf|eot|mp4|webm|avif)(\?|[[:space:]])'
-
-# Count domains where this IP made recent *non-editor* requests (likely scanning).
-count_scanner_domains() {
-    local ip="$1"
-    local ip_esc cutoff
-    ip_esc=$(printf '%s' "$ip" | sed 's/[.[\*^$]/\\&/g')
-    cutoff=$(date -d '15 minutes ago' +%s)
-    grep -lE "^${ip_esc} " "$DOMLOGS"/*/* 2>/dev/null | grep -vE 'bytes_log$|ftp_log$|placeholder' | while read -r f; do
-        grep -E "^${ip_esc} " "$f" 2>/dev/null \
-          | grep -vE "$WP_EDITOR_RE" \
-          | awk -v cutoff="$cutoff" '
-            BEGIN {
-                split("Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec", mn, " ")
-                for (i = 1; i <= 12; i++) mon[mn[i]] = sprintf("%02d", i)
-            }
-            match($0, /\[([0-9]{2})\/([A-Za-z]{3})\/([0-9]{4}):([0-9]{2}):([0-9]{2}):([0-9]{2})/, a) {
-                ts = mktime(a[3] " " mon[a[2]] " " a[1] " " a[4] " " a[5] " " a[6])
-                if (ts >= cutoff) { found = 1; exit }
-            }
-            END { exit !found }
-          ' && basename "$f" | sed 's/-ssl_log$//'
-    done | sort -u
-}
+# CMS / editor path allow list (WHM → Whitelists). Sourced for country-scoped patterns.
+[ -f "${SCRIPT_DIR}/cms-allow.sh" ] && . "${SCRIPT_DIR}/cms-allow.sh"
 
 # Country whitelist applies ONLY to apache-high-volume; all other jails always ban
 [[ "$JAIL" == apache-high-volume ]] && SKIP_WHITELIST=0 || SKIP_WHITELIST=1
@@ -74,12 +50,7 @@ if [ -d "$DOMLOGS" ]; then
         basename "$f" | sed 's/-ssl_log$//'
     done | sort -u | tr '\n' ',' | sed 's/,$//; s/,/, /g')
     [ -n "$DOMAINS" ] && DOMAIN_COUNT=$(echo "$DOMAINS" | tr ',' '\n' | wc -l)
-    if [ "$JAIL" = "apache-high-volume" ]; then
-        SCANNER_DOMAINS=$(count_scanner_domains "$IP")
-        [ -n "$SCANNER_DOMAINS" ] && SCANNER_DOMAIN_COUNT=$(printf '%s\n' "$SCANNER_DOMAINS" | grep -c .)
-    else
-        SCANNER_DOMAIN_COUNT=$DOMAIN_COUNT
-    fi
+    SCANNER_DOMAIN_COUNT=$DOMAIN_COUNT
 fi
 
 # Load ignored countries
@@ -98,7 +69,7 @@ if [ "$SKIP_WHITELIST" != "1" ] && [ -n "$WHITELIST_COUNTRIES" ]; then
     # IP2Location LITE DB1 (country lookup via mmdblookup)
     for db in /etc/fail2ban/GeoIP/IP2LOCATION-LITE-DB1.mmdb; do
         if [ -f "$db" ] && command -v mmdblookup &>/dev/null; then
-            COUNTRY=$(mmdblookup -f "$db" -i "$IP" country iso_code 2>/dev/null | awk -F'"' '/iso_code/ {print $2}')
+            COUNTRY=$(mmdblookup -f "$db" -i "$IP" country iso_code 2>/dev/null | awk -F'"' '$2 ~ /^[A-Z]{2}$/ {print $2; exit}')
             [ -n "$COUNTRY" ] && break
         fi
     done
@@ -114,8 +85,14 @@ if [ "$SKIP_WHITELIST" != "1" ] && [ -n "$WHITELIST_COUNTRIES" ]; then
         done
         if [ "$IS_WHITELISTED" = "1" ]; then
             SKIP_BAN=1
-            # Exception 1: Multi-domain abuse - whitelisted country but scanning many domains.
-            # Uses scanner-domain count (recent non-wp-admin traffic), not historic CMS edits.
+            # Exception 1: Multi-domain abuse - scanning many domains (CMS paths from
+            # cms-allow.conf for this country are not counted).
+            if [ "$JAIL" = "apache-high-volume" ] && type cms_allow_pattern_regex &>/dev/null; then
+                EDITOR_RE=$(cms_allow_pattern_regex "$COUNTRY")
+                SCANNER_DOMAINS=$(cms_allow_scanner_domains "$IP" "$EDITOR_RE")
+                SCANNER_DOMAIN_COUNT=0
+                [ -n "$SCANNER_DOMAINS" ] && SCANNER_DOMAIN_COUNT=$(printf '%s\n' "$SCANNER_DOMAINS" | grep -c .)
+            fi
             if [ -n "$MULTI_DOMAIN_ABUSE_THRESHOLD" ] && [ "$MULTI_DOMAIN_ABUSE_THRESHOLD" -gt 0 ] 2>/dev/null; then
                 if [ "$SCANNER_DOMAIN_COUNT" -ge "$MULTI_DOMAIN_ABUSE_THRESHOLD" ] 2>/dev/null; then
                     SKIP_BAN=0

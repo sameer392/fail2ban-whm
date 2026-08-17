@@ -39,6 +39,7 @@ cd /root/fail2ban/whm-plugin
 | **Unban all whitelisted** | Bulk unban IPs from whitelisted countries |
 | **Whitelist Countries** | Edit whitelisted country codes (e.g. IN, US) |
 | **Whitelist IPs** | Edit IP/CIDR whitelist, save and deploy |
+| **CMS / Editor paths** | Add/edit/delete path patterns (wp-admin, REST, assets, static files) and the country codes they are allowed from |
 | **Blacklist** | Blacklisted organizations; multi-domain abuse threshold |
 | **Update** | Check for updates from GitHub; install by tag; Force re-deploy |
 | **Deploy** | Deploy config and restart fail2ban |

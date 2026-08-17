@@ -39,6 +39,7 @@ ls /usr/local/apache/domlogs/*/* | head -5
 | uninstall.sh | Remove config; --purge = also packages, WHM plugin, /etc and /usr/share |
 | status.sh | Show fail2ban service and jail status |
 | update-whitelist.sh | Regenerate filter ignoreregex from whitelist-ips.conf |
+| cms-allow.sh | Country-scoped CMS/editor path allow (ignorecommand + helper for csf-ban.sh) |
 
 All scripts must be run as root.
 

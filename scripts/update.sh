@@ -45,7 +45,7 @@ done
 mkdir -p "$BKP/action.d"
 [ -f /etc/fail2ban/action.d/csf-domain.conf ] && cp -a /etc/fail2ban/action.d/csf-domain.conf "$BKP/action.d/"
 [ -f /etc/fail2ban/fail2ban.d/loglevel-verbose.conf ] && cp -a /etc/fail2ban/fail2ban.d/loglevel-verbose.conf "$BKP/fail2ban.d/"
-for f in csf-ban.sh setup-ip2location.sh setup-ip2location-asn.sh update-ip2location.sh; do
+for f in csf-ban.sh cms-allow.sh setup-ip2location.sh setup-ip2location-asn.sh update-ip2location.sh; do
    [ -f "/etc/fail2ban/scripts/$f" ] && cp -a "/etc/fail2ban/scripts/$f" "$BKP/scripts/"
 done
 [ -d /etc/fail2ban/conf.d ] && for f in /etc/fail2ban/conf.d/*.conf; do [ -f "$f" ] && cp -a "$f" "$BKP/conf.d/" 2>/dev/null || true; done
@@ -92,11 +92,12 @@ cp -f "$CONFIG_DIR/jail.d/"*.conf /etc/fail2ban/jail.d/
 [ -f "$CONFIG_DIR/fail2ban.d/loglevel-verbose.conf" ] && cp -f "$CONFIG_DIR/fail2ban.d/loglevel-verbose.conf" /etc/fail2ban/fail2ban.d/
 mkdir -p /etc/fail2ban/scripts
 [ -f "$CONFIG_DIR/scripts/csf-ban.sh" ] && cp -f "$CONFIG_DIR/scripts/csf-ban.sh" /etc/fail2ban/scripts/ && chmod +x /etc/fail2ban/scripts/csf-ban.sh
+[ -f "$CONFIG_DIR/scripts/cms-allow.sh" ] && cp -f "$CONFIG_DIR/scripts/cms-allow.sh" /etc/fail2ban/scripts/ && chmod +x /etc/fail2ban/scripts/cms-allow.sh
 [ -f "$CONFIG_DIR/scripts/apply-ipv6-mode.sh" ] && cp -f "$CONFIG_DIR/scripts/apply-ipv6-mode.sh" /etc/fail2ban/scripts/ && chmod +x /etc/fail2ban/scripts/apply-ipv6-mode.sh
 [ -x /etc/fail2ban/scripts/apply-ipv6-mode.sh ] && /etc/fail2ban/scripts/apply-ipv6-mode.sh || true
 mkdir -p /etc/fail2ban/conf.d
 # User configs (conf.d): copy only if not exists - preserve user settings across updates
-for _c in whitelist-countries.conf blocklist-organizations.conf whitelist-domains.conf whitelist-ips.conf ipv6.conf; do
+for _c in whitelist-countries.conf blocklist-organizations.conf whitelist-domains.conf whitelist-ips.conf ipv6.conf cms-allow.conf; do
    [ -f "$CONFIG_DIR/conf.d/$_c" ] && [ ! -f "/etc/fail2ban/conf.d/$_c" ] && cp -f "$CONFIG_DIR/conf.d/$_c" /etc/fail2ban/conf.d/
 done
 [ -f "$CONFIG_DIR/scripts/setup-ip2location.sh" ] && cp -f "$CONFIG_DIR/scripts/setup-ip2location.sh" /etc/fail2ban/scripts/ && chmod +x /etc/fail2ban/scripts/setup-ip2location.sh

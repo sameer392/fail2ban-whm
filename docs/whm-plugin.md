@@ -24,6 +24,7 @@ No cPanel restart needed. Refresh WHM if the plugin does not appear.
 | **Whitelist Countries** | Edit ISO codes; saves to whitelist-countries.conf |
 | **Whitelist Domains/Users** | Exclude domains or cPanel users from protection |
 | **Whitelist IPs** | Edit whitelist-ips.conf; Save & Deploy runs update-whitelist + update |
+| **CMS / Editor paths** | Add/edit/delete path patterns (wp-admin, REST, assets, static files) and the country codes they are allowed from |
 | **Blacklist** | Blacklist countries (CSF CC_DENY – block at firewall); blacklisted organizations; multi-domain abuse threshold |
 | **Deploy** | Runs update.sh to deploy config and restart fail2ban |
 | **Update** | Check for updates from GitHub; install by tag (e.g. v1.0.1); Force re-deploy runs update.sh without downloading |

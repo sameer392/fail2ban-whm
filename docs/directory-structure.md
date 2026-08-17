@@ -9,7 +9,7 @@
 │
 ├── filter.d/               # Fail2ban filters
 │   ├── wordpress-wp-login.conf    # Match wp-login.php requests
-│   └── apache-high-volume.conf   # Match requests; exclude crawlers + WP admin/static
+│   └── apache-high-volume.conf   # Match requests; exclude crawlers (CMS paths via cms-allow.conf)
 │
 ├── jail.d/                 # Jail definitions
 │   ├── wordpress-wp-login.conf   # 5 hits / 5 min → 1 hr ban
@@ -29,6 +29,7 @@
 │   ├── status.sh           # Show fail2ban and jail status
 │   ├── update-whitelist.sh # Regenerate filter ignoreregex from whitelist-ips.conf
 │   ├── csf-ban.sh          # CSF ban helper (country-aware)
+│   ├── cms-allow.sh        # CMS/editor path allow (ignorecommand + helper)
 │   ├── generate-logpath.sh       # Builds logpath excluding domains/users (reads conf.d/whitelist-domains.conf)
 │   ├── setup-ip2location.sh      # One-time IP2Location setup
 │   ├── update-ip2location.sh     # Cron: weekly DB update
@@ -36,6 +37,7 @@
 │
 ├── conf.d/                 # Config files
 │   ├── whitelist-countries.conf     # Countries to never ban (e.g. IN)
+│   ├── cms-allow.conf               # CMS/editor paths allowed per country
 │   ├── whitelist-domains.conf       # Domains/users excluded from monitoring
 │   ├── blocklist-organizations.conf
 │   └── whitelist-ips.conf           # IP/CIDR whitelist (never banned)

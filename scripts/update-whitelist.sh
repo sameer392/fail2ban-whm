@@ -17,9 +17,6 @@ FILTER="$CONFIG_DIR/filter.d/apache-high-volume.conf"
 # Built-in crawler exclusions (same as find_suspicious_ips.sh)
 CRAWLER_REGEX='^66\.249\.|^2a03:2880|^173\.208\.207\.|^40\.77\.|^207\.46\.|googlebot|bingbot|meta-webindexer|facebookexternalhit'
 
-# Legitimate WordPress editor / static traffic — always ignored by apache-high-volume
-LEGIT_TRAFFIC_REGEX='wp-admin|wp-includes|wp-content/|wp-json/|admin-ajax\.php|wp-cron\.php|load-styles\.php|load-scripts\.php|\.(css|js|mjs|map|png|jpe?g|gif|svg|webp|ico|woff2?|ttf|eot|mp4|webm|avif)(\?|\s)'
-
 cidr_to_regex() {
     local entry="$1"
     # IPv6 (optional): prefix match. /64 → first 4 hextets; else exact address.
@@ -92,10 +89,10 @@ while IFS= read -r line; do
 done < "$WHITELIST"
 
 if [ -z "$WL_REGEX" ]; then
-    IGNOREREGEX_HV="${CRAWLER_REGEX}|${LEGIT_TRAFFIC_REGEX}"
+    IGNOREREGEX_HV="$CRAWLER_REGEX"
     IGNOREREGEX_WP=""
 else
-    IGNOREREGEX_HV="${CRAWLER_REGEX}|${LEGIT_TRAFFIC_REGEX}|${WL_REGEX}"
+    IGNOREREGEX_HV="${CRAWLER_REGEX}|${WL_REGEX}"
     IGNOREREGEX_WP="$WL_REGEX"
 fi
 

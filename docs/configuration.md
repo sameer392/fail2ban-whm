@@ -14,10 +14,12 @@
 | File | Purpose |
 |------|---------|
 | filter.d/wordpress-wp-login.conf | Match POST to wp-login.php (login attempts only; GET ignored) |
-| filter.d/apache-high-volume.conf | Match requests; ignoreregex excludes crawlers, whitelist IPs, WordPress admin/REST/static assets |
-| jail.d/*.conf | Jail definitions (backend=polling, logpath, banaction) |
+| filter.d/apache-high-volume.conf | Match requests; ignoreregex excludes crawlers + whitelist IPs. CMS paths are country-scoped via cms-allow.conf |
+| jail.d/*.conf | Jail definitions (backend=polling, logpath, banaction). apache-high-volume uses ignorecommand → cms-allow.sh |
 | action.d/csf-domain.conf | Custom action: actionban → csf-ban.sh, actionunban → csf -dr |
-| scripts/csf-ban.sh | Adds IP to csf.deny; skips whitelisted countries; multi-domain check counts recent scanner (non-wp-admin) hits only |
+| scripts/csf-ban.sh | Adds IP to csf.deny; skips whitelisted countries; multi-domain check uses cms-allow.conf paths for that country |
+| scripts/cms-allow.sh | ignorecommand + path/country helper (WHM-managed cms-allow.conf) |
+| conf.d/cms-allow.conf | CMS/editor path rules: name, pattern, countries, enabled (edit in WHM) |
 | conf.d/whitelist-countries.conf | `WHITELIST_COUNTRIES=IN,US` (ISO codes) |
 | conf.d/whitelist-domains.conf | Domains/users excluded from protection (see Whitelists tab) |
 | /etc/csf/csf.conf (CC_DENY) | Countries to block at firewall - edited via Blacklist tab |
@@ -38,7 +40,13 @@ IPs/CIDRs in this file are whitelisted (excluded from bans). Supported: single I
 
 ### Country Whitelist (whitelist-countries.conf)
 
-**Applies only to `apache-high-volume` jail.** IPs from whitelisted countries are not banned by apache-high-volume (high-traffic abuse), unless they scan many domains with non-CMS traffic (see `MULTI_DOMAIN_ABUSE_THRESHOLD`). WordPress site owners editing several sites from one IP are not treated as multi-domain abuse. **All other jails (wordpress-wp-login, apache-ua-*, etc.) always ban regardless of country**—wp-login brute force and User-Agent abuse are blocked even from whitelisted countries.
+**Applies only to `apache-high-volume` jail.** IPs from whitelisted countries are not banned by apache-high-volume (high-traffic abuse), unless they scan many domains with traffic that is not in the CMS/editor allow list for that country (WHM → Whitelists → CMS / Editor paths). **All other jails (wordpress-wp-login, apache-ua-*, etc.) always ban regardless of country**—wp-login brute force and User-Agent abuse are blocked even from whitelisted countries.
+
+### CMS / Editor paths (conf.d/cms-allow.conf)
+
+WordPress admin, REST, assets, and static files are **not** ignored for every IP. Each rule has a path pattern and one or more country codes. Only matching requests from those countries are treated as legitimate editor traffic.
+
+Edit via WHM → Fail2Ban Manager → Whitelists → CMS / Editor paths (add / edit / delete). Changes apply immediately (no fail2ban restart). Default rules allow typical WordPress editor paths from `IN`.
 
 ```ini
 # conf.d/whitelist-countries.conf

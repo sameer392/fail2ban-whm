@@ -24,6 +24,46 @@ function checkacl($acl) {
     return false;
 }
 
+function parse_cms_allow_conf($path) {
+    $rules = [];
+    if (!is_readable($path)) return $rules;
+    foreach (file($path, FILE_IGNORE_NEW_LINES) as $line) {
+        $line = rtrim($line);
+        if ($line === '' || (isset($line[0]) && $line[0] === '#')) continue;
+        $parts = explode("\t", $line);
+        if (count($parts) < 4) continue;
+        $rules[] = [
+            'name' => $parts[0],
+            'pattern' => $parts[1],
+            'countries' => $parts[2],
+            'enabled' => ($parts[3] === '1') ? 1 : 0,
+        ];
+    }
+    return $rules;
+}
+
+function write_cms_allow_conf($path, $rules) {
+    $header = "# CMS / editor path allow list for apache-high-volume\n";
+    $header .= "# Managed in WHM → Fail2Ban Manager → Whitelists → CMS / Editor paths\n";
+    $header .= "# Format (TAB-separated): name<TAB>pattern<TAB>countries<TAB>enabled\n";
+    $header .= "# countries: comma-separated ISO codes (empty = all countries). enabled: 1 or 0\n#\n";
+    $out = [$header];
+    $n = 0;
+    foreach ($rules as $r) {
+        if ($n >= 50) break;
+        $pattern = str_replace(["\t", "\n", "\r"], '', trim($r['pattern'] ?? ''));
+        if ($pattern === '') continue;
+        $name = str_replace(["\t", "\n", "\r"], ' ', trim($r['name'] ?? ''));
+        $countries = strtoupper(preg_replace('/[^A-Za-z,]/', '', $r['countries'] ?? ''));
+        $enabled = !empty($r['enabled']) ? '1' : '0';
+        $out[] = $name . "\t" . $pattern . "\t" . $countries . "\t" . $enabled;
+        $n++;
+    }
+    $dir = dirname($path);
+    if (!is_dir($dir)) @mkdir($dir, 0755, true);
+    return file_put_contents($path, implode("\n", $out) . "\n") !== false;
+}
+
 function get_ip_country_cache_db() {
     static $pdo = null;
     if ($pdo !== null) return $pdo;
@@ -505,7 +545,7 @@ $action = $_POST['action'] ?? $_GET['action'] ?? '';
 $current_tab = $_GET['tab'] ?? $_POST['tab'] ?? 'dashboard';
 $valid_tabs = ['dashboard' => 'Dashboard', 'banned' => 'Banned IPs', 'whitelists' => 'Whitelists', 'blacklist' => 'Blacklist', 'notifications' => 'Notifications', 'settings' => 'Settings', 'update' => 'Update'];
 if (!isset($valid_tabs[$current_tab])) $current_tab = 'dashboard';
-$tab_from_action = ['save_ignore_countries' => 'whitelists', 'save_whitelist_ips' => 'whitelists', 'save_blocklist_organizations' => 'blacklist', 'save_blacklist_countries' => 'blacklist', 'save_excluded_domains' => 'whitelists', 'save_email_alerts' => 'notifications', 'save_loglevel' => 'settings', 'save_ipv6' => 'settings', 'deploy' => 'settings', 'force_redeploy' => 'update', 'update_ip2location' => 'settings', 'save_ip2location_token' => 'settings', 'setup_ip2location_asn' => 'settings', 'unban' => 'banned', 'unban_bulk' => 'banned', 'unban_whitelisted' => 'banned', 'save_jail_settings' => 'settings', 'do_update' => 'update'];
+$tab_from_action = ['save_ignore_countries' => 'whitelists', 'save_whitelist_ips' => 'whitelists', 'save_cms_allow' => 'whitelists', 'save_blocklist_organizations' => 'blacklist', 'save_blacklist_countries' => 'blacklist', 'save_excluded_domains' => 'whitelists', 'save_email_alerts' => 'notifications', 'save_loglevel' => 'settings', 'save_ipv6' => 'settings', 'deploy' => 'settings', 'force_redeploy' => 'update', 'update_ip2location' => 'settings', 'save_ip2location_token' => 'settings', 'setup_ip2location_asn' => 'settings', 'unban' => 'banned', 'unban_bulk' => 'banned', 'unban_whitelisted' => 'banned', 'save_jail_settings' => 'settings', 'do_update' => 'update'];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action) {
     if ($action === 'save_ignore_countries') {
@@ -609,6 +649,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action) {
             }
         } else {
             $msg = 'Could not write to /etc/fail2ban/conf.d/';
+        }
+    } elseif ($action === 'save_cms_allow') {
+        $rules = [];
+        $names = $_POST['cms_name'] ?? [];
+        $patterns = $_POST['cms_pattern'] ?? [];
+        $countries = $_POST['cms_countries'] ?? [];
+        $enabled = $_POST['cms_enabled'] ?? [];
+        $delete = $_POST['cms_delete'] ?? [];
+        $n = is_array($patterns) ? count($patterns) : 0;
+        for ($i = 0; $i < $n; $i++) {
+            if (!empty($delete[$i])) continue;
+            $p = trim($patterns[$i] ?? '');
+            if ($p === '') continue;
+            $rules[] = [
+                'name' => trim($names[$i] ?? ''),
+                'pattern' => $p,
+                'countries' => trim($countries[$i] ?? ''),
+                'enabled' => !empty($enabled[$i]) ? 1 : 0,
+            ];
+        }
+        $np = trim($_POST['cms_new_pattern'] ?? '');
+        if ($np !== '') {
+            $rules[] = [
+                'name' => trim($_POST['cms_new_name'] ?? ''),
+                'pattern' => $np,
+                'countries' => trim($_POST['cms_new_countries'] ?? ''),
+                'enabled' => !empty($_POST['cms_new_enabled']) ? 1 : 0,
+            ];
+        }
+        $conf = '/etc/fail2ban/conf.d/cms-allow.conf';
+        if (write_cms_allow_conf($conf, $rules)) {
+            $share = '/usr/share/fail2ban/conf.d/cms-allow.conf';
+            if (is_dir(dirname($share))) @file_put_contents($share, file_get_contents($conf));
+            $msg = 'CMS / editor path rules saved. No fail2ban restart required.';
+        } else {
+            $msg = 'Could not write cms-allow.conf';
         }
     } elseif ($action === 'save_useragent_keywords') {
         $conf = '/etc/fail2ban/conf.d/useragent-keywords.conf';
@@ -872,6 +948,11 @@ if (file_exists($blocklist_conf) && is_readable($blocklist_conf)) {
     if (preg_match('/BLOCKED_ORGANIZATIONS=(.*)$/m', $bc, $m)) $blocked_organizations = trim($m[1]);
     if (preg_match('/MULTI_DOMAIN_ABUSE_THRESHOLD=\s*(\d+)/', $bc, $m)) $multi_domain_threshold = max(0, min(20, (int)$m[1]));
 }
+$cms_allow_conf = '/etc/fail2ban/conf.d/cms-allow.conf';
+if (!is_readable($cms_allow_conf) && is_readable('/usr/share/fail2ban/conf.d/cms-allow.conf')) {
+    $cms_allow_conf = '/usr/share/fail2ban/conf.d/cms-allow.conf';
+}
+$cms_allow_rules = parse_cms_allow_conf($cms_allow_conf);
 
 function is_geoip_ready() {
     $mmdb = '/etc/fail2ban/GeoIP/IP2LOCATION-LITE-DB1.mmdb';
@@ -1306,6 +1387,56 @@ $plugins_url = $home_url;
     </div>
   </div>
 </div>
+<div class="row" style="margin-top:15px;">
+  <div class="col-md-12">
+    <div class="panel panel-default">
+      <div class="panel-heading">CMS / Editor paths (country-scoped)</div>
+      <div class="panel-body">
+        <p class="text-muted">These request paths are <strong>not</strong> ignored for every visitor. They are treated as legitimate editor traffic only for the country codes you set (ISO, e.g. <code>IN</code> or <code>IN,US</code>). Leave countries empty to allow from all countries. Used by apache-high-volume (ignore + multi-domain check). Other jails (wp-login, user-agent) still apply.</p>
+        <form method="post">
+          <input type="hidden" name="action" value="save_cms_allow">
+          <input type="hidden" name="tab" value="whitelists">
+          <table class="table table-condensed table-striped" style="margin-bottom:12px;">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Path / pattern</th>
+                <th style="width:140px;">Countries</th>
+                <th style="width:70px;">On</th>
+                <th style="width:80px;">Delete</th>
+              </tr>
+            </thead>
+            <tbody>
+              <?php foreach ($cms_allow_rules as $i => $r): ?>
+              <tr>
+                <td><input type="text" name="cms_name[<?php echo (int)$i; ?>]" value="<?php echo htmlspecialchars($r['name']); ?>" class="form-control input-sm"></td>
+                <td><input type="text" name="cms_pattern[<?php echo (int)$i; ?>]" value="<?php echo htmlspecialchars($r['pattern']); ?>" class="form-control input-sm" style="font-family:monospace;"></td>
+                <td><input type="text" name="cms_countries[<?php echo (int)$i; ?>]" value="<?php echo htmlspecialchars($r['countries']); ?>" class="form-control input-sm" placeholder="IN,US"></td>
+                <td>
+                  <input type="hidden" name="cms_enabled[<?php echo (int)$i; ?>]" value="0">
+                  <input type="checkbox" name="cms_enabled[<?php echo (int)$i; ?>]" value="1" <?php echo !empty($r['enabled']) ? 'checked' : ''; ?>>
+                </td>
+                <td><input type="checkbox" name="cms_delete[<?php echo (int)$i; ?>]" value="1" title="Remove this rule"></td>
+              </tr>
+              <?php endforeach; ?>
+              <tr>
+                <td><input type="text" name="cms_new_name" class="form-control input-sm" placeholder="New name"></td>
+                <td><input type="text" name="cms_new_pattern" class="form-control input-sm" style="font-family:monospace;" placeholder="e.g. wp-admin"></td>
+                <td><input type="text" name="cms_new_countries" class="form-control input-sm" placeholder="IN"></td>
+                <td>
+                  <input type="hidden" name="cms_new_enabled" value="0">
+                  <input type="checkbox" name="cms_new_enabled" value="1" checked>
+                </td>
+                <td class="text-muted">Add</td>
+              </tr>
+            </tbody>
+          </table>
+          <button type="submit" class="btn btn-primary btn-sm">Save rules</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
 </div>
 
 <!-- Tab: Blacklist -->
@@ -1337,7 +1468,7 @@ $plugins_url = $home_url;
 <div class="panel panel-default" style="max-width:600px;">
   <div class="panel-heading">Blacklisted Organizations &amp; Multi-Domain Abuse</div>
   <div class="panel-body">
-    <p class="text-muted">IPs from blacklisted orgs (e.g. Microsoft, DigitalOcean) are always banned, even from whitelisted countries. If an IP from a whitelisted country scans many domains in a short time (non-WordPress-admin traffic), it is also banned. Site owners editing several WP sites from one IP are not counted.</p>
+    <p class="text-muted">IPs from blacklisted orgs (e.g. Microsoft, DigitalOcean) are always banned, even from whitelisted countries. If an IP from a whitelisted country scans many domains in a short time (traffic that is not in CMS / Editor paths for that country), it is also banned. Site owners editing several WP sites from one IP are not counted.</p>
     <form method="post">
       <input type="hidden" name="action" value="save_blocklist_organizations">
       <input type="hidden" name="tab" value="blacklist">
@@ -1347,7 +1478,7 @@ $plugins_url = $home_url;
       </div>
       <div class="form-group">
         <label>Multi-domain abuse threshold</label>
-        <input type="number" name="multi_domain_threshold" value="<?php echo (int)$multi_domain_threshold; ?>" min="0" max="20" class="form-control" style="width:80px;" title="Ban whitelisted-country IPs that scan this many domains (wp-admin traffic ignored)">
+        <input type="number" name="multi_domain_threshold" value="<?php echo (int)$multi_domain_threshold; ?>" min="0" max="20" class="form-control" style="width:80px;" title="Ban whitelisted-country IPs that scan this many domains (CMS/editor paths for that country are not counted)">
         <span class="text-muted" style="margin-left:8px;">(0 = disabled)</span>
       </div>
       <button type="submit" class="btn btn-primary btn-sm">Save</button>
