@@ -24,22 +24,22 @@ paths=""
 if [ ! -d "$DOMLOGS" ]; then
    paths="/usr/local/apache/domlogs/*/*"
 elif [ -z "$excluded_users" ] && [ -z "$excluded_domains" ]; then
-   # No exclusions: use wildcard (simpler, no huge config)
    paths="/usr/local/apache/domlogs/*/*"
 else
    while IFS= read -r -d '' f; do
       [ -f "$f" ] || continue
       user=$(basename "$(dirname "$f")")
       domain=$(basename "$f")
+      case "$domain" in
+         *-bytes_log) continue ;;
+      esac
 
-      # Check excluded user
       if [ -n "$excluded_users" ]; then
          for u in $excluded_users; do
             [ "$u" = "$user" ] && continue 2
          done
       fi
 
-      # Check excluded domain (match domain or domain-ssl_log etc)
       if [ -n "$excluded_domains" ]; then
          for d in $excluded_domains; do
             case "$domain" in
@@ -66,6 +66,9 @@ cat > "$OUTPUT" << EOF
 logpath = $paths
 
 [wordpress-wp-login]
+logpath = $paths
+
+[apache-ua-keywords]
 logpath = $paths
 EOF
 

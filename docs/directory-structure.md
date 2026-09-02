@@ -3,17 +3,21 @@
 ```
 /root/fail2ban/
 ├── install.sh              # Bootstrap installer (curl | bash from GitHub)
+├── CHANGELOG.md
 ├── logrotate.d/            # Logrotate configs
 │   └── fail2ban            # → /etc/logrotate.d/fail2ban
 ├── README.md
 │
 ├── filter.d/               # Fail2ban filters
 │   ├── wordpress-wp-login.conf    # Match wp-login.php requests
-│   └── apache-high-volume.conf   # Match requests; exclude crawlers (CMS paths via cms-allow.conf)
+│   ├── apache-high-volume.conf   # Match requests; exclude crawlers (CMS paths via cms-allow.conf)
+│   └── apache-ua-keywords.conf   # Combined User-Agent keyword rules
 │
-├── jail.d/                 # Jail definitions
+├── jail.d/                 # Jail definitions (backend=pyinotify)
+│   ├── 98-domlog-backend.conf    # Force pyinotify + usedns=no for domlog jails
 │   ├── wordpress-wp-login.conf   # 5 hits / 5 min → 1 hr ban
-│   └── apache-high-volume.conf  # 100 counted hits / 10 min → 1 hr ban
+│   ├── apache-high-volume.conf  # 100 counted hits / 10 min → 1 hr ban
+│   └── apache-ua-keywords.conf  # Combined UA jail (generated/updated by update-useragent-jails.sh)
 │
 ├── action.d/
 │   └── csf-domain.conf     # Ban via CSF with domain comment
@@ -28,6 +32,7 @@
 │   ├── restore-backup.sh   # Restore from backup
 │   ├── status.sh           # Show fail2ban and jail status
 │   ├── update-whitelist.sh # Regenerate filter ignoreregex from whitelist-ips.conf
+│   ├── update-useragent-jails.sh # Build single apache-ua-keywords jail from conf
 │   ├── csf-ban.sh          # CSF ban helper (country-aware)
 │   ├── cms-allow.sh        # CMS/editor path allow (ignorecommand + helper)
 │   ├── generate-logpath.sh       # Builds logpath excluding domains/users (reads conf.d/whitelist-domains.conf)
@@ -39,7 +44,9 @@
 │   ├── whitelist-countries.conf     # Countries to never ban (e.g. IN)
 │   ├── cms-allow.conf               # CMS/editor paths allowed per country
 │   ├── whitelist-domains.conf       # Domains/users excluded from monitoring
+│   ├── useragent-keywords.conf      # UA keywords → single apache-ua-keywords jail
 │   ├── blocklist-organizations.conf
+│   ├── ipv6.conf
 │   └── whitelist-ips.conf           # IP/CIDR whitelist (never banned)
 │
 └── whm-plugin/

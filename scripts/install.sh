@@ -61,13 +61,13 @@ if [ "$SCRIPT_SRC" != "$INSTALL_DIR" ]; then
 fi
 CONFIG_DIR="$INSTALL_DIR"
 
-# 1. Install fail2ban if not installed
+# 1. Install fail2ban (+ pyinotify backend deps) if needed
 if ! rpm -q fail2ban-server &>/dev/null; then
    echo "[1/7] Installing fail2ban..."
    if command -v dnf &>/dev/null; then
-      dnf install -y fail2ban fail2ban-systemd
+      dnf install -y fail2ban fail2ban-systemd python3-inotify
    elif command -v yum &>/dev/null; then
-      yum install -y fail2ban fail2ban-systemd
+      yum install -y fail2ban fail2ban-systemd python3-inotify
    else
       echo "Error: dnf or yum not found. Please install fail2ban manually." >&2
       exit 1
@@ -75,6 +75,15 @@ if ! rpm -q fail2ban-server &>/dev/null; then
    echo "      fail2ban installed."
 else
    echo "[1/7] fail2ban already installed."
+fi
+# pyinotify is required for event-driven domlog watching (avoids polling CPU cost)
+if ! python3 -c "import pyinotify" &>/dev/null; then
+   echo "      Installing python3-inotify (pyinotify backend)..."
+   if command -v dnf &>/dev/null; then
+      dnf install -y python3-inotify || echo "      Warning: install python3-inotify failed; fail2ban may fall back to polling."
+   elif command -v yum &>/dev/null; then
+      yum install -y python3-inotify || echo "      Warning: install python3-inotify failed; fail2ban may fall back to polling."
+   fi
 fi
 
 # 2. Deploy config
@@ -88,7 +97,7 @@ mkdir -p /etc/fail2ban/scripts
 [ -f "$CONFIG_DIR/scripts/cms-allow.sh" ] && cp -f "$CONFIG_DIR/scripts/cms-allow.sh" /etc/fail2ban/scripts/ && chmod +x /etc/fail2ban/scripts/cms-allow.sh
 mkdir -p /etc/fail2ban/conf.d
 # User configs (conf.d): copy only if not exists - preserve user settings across updates
-for _c in whitelist-countries.conf blocklist-organizations.conf whitelist-domains.conf whitelist-ips.conf ipv6.conf cms-allow.conf; do
+for _c in whitelist-countries.conf blocklist-organizations.conf whitelist-domains.conf whitelist-ips.conf ipv6.conf cms-allow.conf useragent-keywords.conf; do
    [ -f "$CONFIG_DIR/conf.d/$_c" ] && [ ! -f "/etc/fail2ban/conf.d/$_c" ] && cp -f "$CONFIG_DIR/conf.d/$_c" /etc/fail2ban/conf.d/
 done
 [ -f "$CONFIG_DIR/scripts/setup-ip2location.sh" ] && cp -f "$CONFIG_DIR/scripts/setup-ip2location.sh" /etc/fail2ban/scripts/ && chmod +x /etc/fail2ban/scripts/setup-ip2location.sh
@@ -98,9 +107,16 @@ done
 [ -f "$CONFIG_DIR/scripts/update-from-github.sh" ] && cp -f "$CONFIG_DIR/scripts/update-from-github.sh" /etc/fail2ban/scripts/ && chmod +x /etc/fail2ban/scripts/update-from-github.sh
 [ -f "$CONFIG_DIR/scripts/generate-logpath.sh" ] && cp -f "$CONFIG_DIR/scripts/generate-logpath.sh" /etc/fail2ban/scripts/ && chmod +x /etc/fail2ban/scripts/generate-logpath.sh
 [ -f "$CONFIG_DIR/logrotate.d/fail2ban" ] && cp -f "$CONFIG_DIR/logrotate.d/fail2ban" /etc/logrotate.d/fail2ban && echo "      Logrotate config installed."
+# Remove legacy per-keyword UA jails (pre-1.0.7); one combined jail is enough
+for old in /etc/fail2ban/jail.d/apache-ua-*.conf /etc/fail2ban/filter.d/apache-ua-*.conf; do
+   [ -f "$old" ] || continue
+   base=$(basename "$old" .conf)
+   [ "$base" = "apache-ua-keywords" ] || rm -f "$old"
+done
 [ -x /etc/fail2ban/scripts/generate-logpath.sh ] && /etc/fail2ban/scripts/generate-logpath.sh || true
+# Regenerate combined UA jail from conf.d/useragent-keywords.conf
+[ -x /etc/fail2ban/scripts/update-useragent-jails.sh ] && /etc/fail2ban/scripts/update-useragent-jails.sh || true
 echo "      Config deployed."
-
 # 3. Install libmaxminddb (for IP2Location country lookup via mmdblookup)
 echo "[3/7] Installing libmaxminddb (if not installed)..."
 if ! command -v mmdblookup &>/dev/null; then

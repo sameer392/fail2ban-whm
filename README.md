@@ -8,6 +8,8 @@ A complete fail2ban configuration for cPanel/WHM servers that blocks WordPress b
 |---------|-------------|
 | **wordpress-wp-login** | Blocks wp-login.php brute force (5+ requests in 5 min) |
 | **apache-high-volume** | Blocks high-volume traffic (100+ requests in 10 min, excludes crawlers). CMS/editor paths are allowed per country via WHM (not ignored globally). |
+| **apache-ua-keywords** | Combined User-Agent jail (empty UA, python, headless, Darwin, …) — one jail instead of one per keyword |
+| **Low-CPU log watching** | Domlog jails use **pyinotify** (not polling) + `usedns=no` to keep fail2ban CPU low on busy servers |
 | **CSF integration** | Bans via CSF with jail name and affected domain(s) in comment |
 | **Country whitelist** | Skip banning IPs from specified countries (e.g. India, US) |
 | **IP whitelist** | Exclude trusted IPs/CIDRs from bans |

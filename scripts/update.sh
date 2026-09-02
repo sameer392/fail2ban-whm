@@ -36,16 +36,24 @@ echo "[1/5] Backing up current config..."
 mkdir -p "$BACKUP_DIR"
 BKP="$BACKUP_DIR/$TIMESTAMP"
 mkdir -p "$BKP/filter.d" "$BKP/jail.d" "$BKP/fail2ban.d" "$BKP/scripts" "$BKP/conf.d"
-for f in /etc/fail2ban/filter.d/wordpress-wp-login.conf /etc/fail2ban/filter.d/apache-high-volume.conf; do
+for f in /etc/fail2ban/filter.d/wordpress-wp-login.conf /etc/fail2ban/filter.d/apache-high-volume.conf /etc/fail2ban/filter.d/apache-ua-keywords.conf; do
    [ -f "$f" ] && cp -a "$f" "$BKP/filter.d/"
 done
-for f in /etc/fail2ban/jail.d/wordpress-wp-login.conf /etc/fail2ban/jail.d/apache-high-volume.conf; do
+for f in /etc/fail2ban/jail.d/wordpress-wp-login.conf /etc/fail2ban/jail.d/apache-high-volume.conf /etc/fail2ban/jail.d/apache-ua-keywords.conf /etc/fail2ban/jail.d/98-domlog-backend.conf; do
    [ -f "$f" ] && cp -a "$f" "$BKP/jail.d/"
 done
-mkdir -p "$BKP/action.d"
+# Also back up any legacy per-keyword UA jails before migration
+for f in /etc/fail2ban/jail.d/apache-ua-*.conf /etc/fail2ban/filter.d/apache-ua-*.conf; do
+   [ -f "$f" ] || continue
+   case "$f" in
+      */filter.d/*) cp -a "$f" "$BKP/filter.d/" ;;
+      *) cp -a "$f" "$BKP/jail.d/" ;;
+   esac
+done
+mkdir -p "$BKP/action.d" "$BKP/logrotate.d"
 [ -f /etc/fail2ban/action.d/csf-domain.conf ] && cp -a /etc/fail2ban/action.d/csf-domain.conf "$BKP/action.d/"
 [ -f /etc/fail2ban/fail2ban.d/loglevel-verbose.conf ] && cp -a /etc/fail2ban/fail2ban.d/loglevel-verbose.conf "$BKP/fail2ban.d/"
-for f in csf-ban.sh cms-allow.sh setup-ip2location.sh setup-ip2location-asn.sh update-ip2location.sh; do
+for f in csf-ban.sh cms-allow.sh setup-ip2location.sh setup-ip2location-asn.sh update-ip2location.sh update-useragent-jails.sh generate-logpath.sh; do
    [ -f "/etc/fail2ban/scripts/$f" ] && cp -a "/etc/fail2ban/scripts/$f" "$BKP/scripts/"
 done
 [ -d /etc/fail2ban/conf.d ] && for f in /etc/fail2ban/conf.d/*.conf; do [ -f "$f" ] && cp -a "$f" "$BKP/conf.d/" 2>/dev/null || true; done
@@ -85,6 +93,16 @@ done
 # Remove deprecated scripts/configurations if empty (all configs moved to conf.d)
 rmdir /etc/fail2ban/scripts/configurations 2>/dev/null || true
 
+# Ensure pyinotify is available (required since 1.0.7)
+if ! python3 -c "import pyinotify" &>/dev/null; then
+   echo "      Installing python3-inotify (pyinotify backend)..."
+   if command -v dnf &>/dev/null; then
+      dnf install -y python3-inotify || echo "      Warning: install python3-inotify failed; fail2ban may fall back to polling."
+   elif command -v yum &>/dev/null; then
+      yum install -y python3-inotify || echo "      Warning: install python3-inotify failed; fail2ban may fall back to polling."
+   fi
+fi
+
 echo "[2/5] Deploying config to /etc/fail2ban/..."
 cp -f "$CONFIG_DIR/filter.d/"*.conf /etc/fail2ban/filter.d/
 cp -f "$CONFIG_DIR/jail.d/"*.conf /etc/fail2ban/jail.d/
@@ -97,7 +115,7 @@ mkdir -p /etc/fail2ban/scripts
 [ -x /etc/fail2ban/scripts/apply-ipv6-mode.sh ] && /etc/fail2ban/scripts/apply-ipv6-mode.sh || true
 mkdir -p /etc/fail2ban/conf.d
 # User configs (conf.d): copy only if not exists - preserve user settings across updates
-for _c in whitelist-countries.conf blocklist-organizations.conf whitelist-domains.conf whitelist-ips.conf ipv6.conf cms-allow.conf; do
+for _c in whitelist-countries.conf blocklist-organizations.conf whitelist-domains.conf whitelist-ips.conf ipv6.conf cms-allow.conf useragent-keywords.conf; do
    [ -f "$CONFIG_DIR/conf.d/$_c" ] && [ ! -f "/etc/fail2ban/conf.d/$_c" ] && cp -f "$CONFIG_DIR/conf.d/$_c" /etc/fail2ban/conf.d/
 done
 [ -f "$CONFIG_DIR/scripts/setup-ip2location.sh" ] && cp -f "$CONFIG_DIR/scripts/setup-ip2location.sh" /etc/fail2ban/scripts/ && chmod +x /etc/fail2ban/scripts/setup-ip2location.sh
@@ -107,11 +125,17 @@ done
 [ -f "$CONFIG_DIR/scripts/update-from-github.sh" ] && cp -f "$CONFIG_DIR/scripts/update-from-github.sh" /etc/fail2ban/scripts/ && chmod +x /etc/fail2ban/scripts/update-from-github.sh
 [ -f "$CONFIG_DIR/scripts/generate-logpath.sh" ] && cp -f "$CONFIG_DIR/scripts/generate-logpath.sh" /etc/fail2ban/scripts/ && chmod +x /etc/fail2ban/scripts/generate-logpath.sh
 [ -f "$CONFIG_DIR/logrotate.d/fail2ban" ] && cp -f "$CONFIG_DIR/logrotate.d/fail2ban" /etc/logrotate.d/fail2ban
+# Remove legacy per-keyword UA jails (pre-1.0.7); keep only apache-ua-keywords
+for old in /etc/fail2ban/jail.d/apache-ua-*.conf /etc/fail2ban/filter.d/apache-ua-*.conf; do
+   [ -f "$old" ] || continue
+   base=$(basename "$old" .conf)
+   [ "$base" = "apache-ua-keywords" ] || rm -f "$old"
+done
 echo "      Config deployed."
 
-echo "[3/5] Generating logpath (excluded domains)..."
+echo "[3/5] Generating logpath + User-Agent jail..."
 [ -x /etc/fail2ban/scripts/generate-logpath.sh ] && /etc/fail2ban/scripts/generate-logpath.sh || true
-
+[ -x /etc/fail2ban/scripts/update-useragent-jails.sh ] && /etc/fail2ban/scripts/update-useragent-jails.sh || true
 echo "[4/5] Updating WHM plugin..."
 WHM_PLUGIN_DIR="$CONFIG_DIR/whm-plugin"
 if [ -x "$WHM_PLUGIN_DIR/install-whm-plugin.sh" ] && [ -f "$WHM_PLUGIN_DIR/plugin/index.php" ]; then
