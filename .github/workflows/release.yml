@@ -39,10 +39,20 @@ jobs:
             fi
           } > /tmp/body.md
 
-      - name: Create GitHub Release
+      - name: Create or update GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "$GITHUB_REF_NAME" install.sh \
-            --title "Release ${GITHUB_REF_NAME} — Fail2Ban Protection for cPanel/WHM" \
-            --notes-file /tmp/body.md
+          set -euo pipefail
+          TAG="$GITHUB_REF_NAME"
+          TITLE="Release ${TAG} — Fail2Ban Protection for cPanel/WHM"
+          # Moving a tag (e.g. rewriting a commit) re-runs this workflow.
+          # Update the existing release instead of failing with "already exists".
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --title "$TITLE" --notes-file /tmp/body.md
+            gh release upload "$TAG" install.sh --clobber
+          else
+            gh release create "$TAG" install.sh \
+              --title "$TITLE" \
+              --notes-file /tmp/body.md
+          fi
