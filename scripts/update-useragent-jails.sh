@@ -17,6 +17,12 @@ JAIL_NAME="apache-ua-keywords"
     exit 0
 }
 
+# Darwin is in every iOS/macOS User-Agent (CFNetwork). Comment it out of existing
+# configs so upgrades and WHM restores cannot re-enable the false positive.
+if grep -qiE '^[[:space:]]*Darwin[[:space:]]*\|' "$CONFIG"; then
+    sed -i -E 's/^[[:space:]]*[Dd][Aa][Rr][Ww][Ii][Nn][[:space:]]*\|.*/# Darwin removed in 1.0.8: matches every iOS\/macOS User-Agent./' "$CONFIG"
+fi
+
 escape_regex() {
     echo "$1" | sed 's/[.[\*^$()+?{|\\]/\\&/g'
 }
@@ -32,6 +38,11 @@ while IFS='|' read -r keyword maxretry findtime bantime _; do
     [ -z "$keyword" ] && continue
     keyword=$(echo "$keyword" | tr -d ' ')
     [ -z "$keyword" ] && continue
+    kw_lc=$(echo "$keyword" | tr '[:upper:]' '[:lower:]')
+    if [ "$kw_lc" = "darwin" ]; then
+        echo "Skipping keyword Darwin (matches all iOS/macOS browsers)." >&2
+        continue
+    fi
     maxretry=$(echo "${maxretry:-1}" | tr -cd '0-9')
     findtime=$(echo "${findtime:-60}" | tr -cd '0-9')
     bantime=$(echo "${bantime:-3600}" | tr -cd '0-9')

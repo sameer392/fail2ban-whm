@@ -5,7 +5,7 @@
  * Fail2Ban Manager - WHM Plugin
  * Manage fail2ban jails, banned IPs, whitelists from WHM
  */
-define('FAIL2BAN_WHM_VERSION', '1.0.7');
+define('FAIL2BAN_WHM_VERSION', '1.0.8');
 require_once('/usr/local/cpanel/php/WHM.php');
 
 function checkacl($acl) {
@@ -691,6 +691,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action) {
         $dir = dirname($conf);
         $lines = [];
         $raw = $_POST['useragent_keywords'] ?? '';
+        $skipped_darwin = false;
         foreach (array_filter(preg_split('/\r?\n/', $raw)) as $line) {
             $line = trim($line);
             if ($line === '' || $line[0] === '#') continue;
@@ -698,16 +699,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action) {
             if (empty($parts[0])) continue;
             $kw = preg_replace('/[^a-zA-Z0-9\s\-_]/', '', $parts[0]);
             if ($kw === '') continue;
+            if (strcasecmp($kw, 'Darwin') === 0) {
+                $skipped_darwin = true;
+                continue;
+            }
             $maxretry = max(1, min(100, (int)($parts[1] ?? 1)));
             $findtime = max(60, min(86400 * 7, (int)($parts[2] ?? 60)));
             $bantime = max(60, min(86400 * 365, (int)($parts[3] ?? 3600)));
             $lines[] = $kw . '|' . $maxretry . '|' . $findtime . '|' . $bantime;
         }
         if (!is_dir($dir)) @mkdir($dir, 0755, true);
-        $content = "# User-Agent keyword blocking (keyword|maxretry|findtime|bantime)\n# Examples: python|1|60|3600  headless|2|300|86400\n" . implode("\n", $lines) . "\n";
+        $content = "# User-Agent keyword blocking (keyword|maxretry|findtime|bantime)\n# Examples: python|1|60|3600  headless|2|300|86400\n# Do not add Darwin — it is in every iOS/macOS User-Agent and bans real visitors.\n" . implode("\n", $lines) . "\n";
         if (file_put_contents($conf, $content) !== false) {
             exec('/etc/fail2ban/scripts/update-useragent-jails.sh 2>&1', $out, $ret);
             $msg = $ret === 0 ? 'User-Agent keywords saved and fail2ban reloaded.' : 'Saved but reload failed: ' . implode(' ', $out);
+            if ($skipped_darwin) {
+                $msg .= ' Darwin was ignored: it matches every iOS/macOS browser and would ban real visitors.';
+            }
         } else {
             $msg = 'Could not write useragent-keywords.conf';
         }
@@ -1539,7 +1547,7 @@ $plugins_url = $home_url;
 <div class="panel panel-default">
   <div class="panel-heading">User-Agent Keyword Blocking</div>
   <div class="panel-body">
-    <p class="text-muted">Block IPs when their User-Agent contains these keywords (e.g. python, headless, curl). Each keyword has its own max requests, time window, and ban duration. Format: <code>keyword|maxretry|findtime|bantime</code> (one per line).</p>
+    <p class="text-muted">Block IPs when their User-Agent contains these keywords (e.g. python, headless, curl). Each keyword has its own max requests, time window, and ban duration. Format: <code>keyword|maxretry|findtime|bantime</code> (one per line). Do not use <code>Darwin</code> — it is in every iOS/macOS User-Agent and bans real visitors.</p>
     <form method="post">
       <input type="hidden" name="action" value="save_useragent_keywords">
       <input type="hidden" name="tab" value="settings">

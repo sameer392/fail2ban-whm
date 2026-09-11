@@ -63,11 +63,16 @@ All scripts must be run as root.
 
 ## Creating a Release (maintainers)
 
-1. Tag and push: `git tag v1.0.2 && git push origin v1.0.2`
-2. GitHub auto-generates the source archive at `https://github.com/sameer392/fail2ban-whm/archive/refs/tags/v1.0.2.zip`
-3. Users can update via WHM (Update tab) or `update-from-github.sh v1.0.2`
+1. Bump `FAIL2BAN_WHM_VERSION` in `whm-plugin/plugin/index.php` and add a `CHANGELOG.md` section.
+2. Commit, tag, and push:
+   ```bash
+   git tag v1.0.8 && git push origin main && git push origin v1.0.8
+   ```
+3. Pushing a `v*` tag runs `.github/workflows/release.yml`, which creates the GitHub Release (WHM “Check for updates” reads `/releases/latest`) and attaches `install.sh`.
+4. GitHub also auto-generates the source archive at `https://github.com/sameer392/fail2ban-whm/archive/refs/tags/v1.0.8.zip`
+5. Users update via WHM (Update tab) or `update-from-github.sh v1.0.8`
 
-No manual zip creation or upload needed. Optionally create a GitHub Release for the tag to add release notes.
+A GitHub **Release** (not only a git tag) is required for WHM and `install.sh` to see the new version.
 
 ---
 

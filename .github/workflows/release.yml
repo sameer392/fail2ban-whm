@@ -1,0 +1,48 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Build release notes from CHANGELOG
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          VER="${TAG#v}"
+          awk -v ver="$VER" '
+            $0 ~ "^## \\[" ver "\\]" {p=1; print; next}
+            p && $0 ~ /^## \[/ {exit}
+            p {print}
+          ' CHANGELOG.md > /tmp/notes.md
+          if [ ! -s /tmp/notes.md ]; then
+            echo "No CHANGELOG section for ${VER}" >&2
+            exit 1
+          fi
+          PREV=$(git describe --tags --abbrev=0 --match 'v*' HEAD^ 2>/dev/null || true)
+          {
+            cat /tmp/notes.md
+            if [ -n "$PREV" ]; then
+              echo
+              echo "**Full changelog:** https://github.com/${GITHUB_REPOSITORY}/compare/${PREV}...${TAG}"
+            fi
+          } > /tmp/body.md
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" install.sh \
+            --title "Release ${GITHUB_REF_NAME} — Fail2Ban Protection for cPanel/WHM" \
+            --notes-file /tmp/body.md

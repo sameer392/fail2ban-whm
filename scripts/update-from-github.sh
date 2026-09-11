@@ -64,6 +64,10 @@ echo "Restoring user configs..."
 mkdir -p /etc/fail2ban/conf.d
 for f in "$BACKUP"/*.conf; do [ -f "$f" ] && cp -a "$f" /etc/fail2ban/conf.d/ 2>/dev/null || true; done
 
+# Restore can bring back Darwin; strip it and regenerate the combined UA jail.
+echo "Applying User-Agent jail (Darwin is never banned)..."
+[ -x /etc/fail2ban/scripts/update-useragent-jails.sh ] && /etc/fail2ban/scripts/update-useragent-jails.sh || true
+
 echo "Installing WHM plugin..."
 [ -x "$INSTALL_DIR/whm-plugin/install-whm-plugin.sh" ] && (cd "$INSTALL_DIR/whm-plugin" && ./install-whm-plugin.sh) || true
 
