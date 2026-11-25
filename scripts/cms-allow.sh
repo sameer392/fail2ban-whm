@@ -1,6 +1,6 @@
 #!/bin/bash
 # CMS / editor allow helper for apache-high-volume
-# Used as fail2ban ignorecommand and sourced by csf-ban.sh
+# Used as fail2ban ignorecommand and sourced by csf-ban-process.sh (local lookups only)
 #
 # ignorecommand: exit 0 = do not ban (legitimate editor from allowed country)
 #                exit 1 = do not ignore (ban may proceed)
@@ -23,11 +23,8 @@ cms_allow_country() {
     if [ -f "$db" ] && command -v mmdblookup &>/dev/null; then
         country=$(mmdblookup -f "$db" -i "$ip" country iso_code 2>/dev/null | awk -F'"' '$2 ~ /^[A-Z]{2}$/ {print $2; exit}')
     fi
-    if [ -z "$country" ] && command -v curl &>/dev/null; then
-        local enc
-        enc=$(python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1], safe=""))' "$ip" 2>/dev/null || printf '%s' "$ip")
-        country=$(curl -s --connect-timeout 2 --max-time 4 "http://ip-api.com/json/${enc}?fields=countryCode" 2>/dev/null | grep -o '"countryCode":"[A-Z]*"' | cut -d'"' -f4)
-    fi
+    # Local IP2Location database only: no network lookup here, because this runs on
+    # every matching log line. Unknown country is printed as an empty string.
     printf '%s' "$country"
 }
 

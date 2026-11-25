@@ -31,9 +31,6 @@ if [[ "$IP" == *:* ]]; then
     [ "${ENABLE_IPV6:-0}" != "1" ] && exit 0
 fi
 
-urlencode_ip() {
-    python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1], safe=""))' "$1" 2>/dev/null || printf '%s' "$1"
-}
 
 # CMS / editor path allow list (WHM → Whitelists). Sourced for country-scoped patterns.
 [ -f "${SCRIPT_DIR}/cms-allow.sh" ] && . "${SCRIPT_DIR}/cms-allow.sh"
@@ -74,10 +71,8 @@ if [ "$SKIP_WHITELIST" != "1" ] && [ -n "$WHITELIST_COUNTRIES" ]; then
             [ -n "$COUNTRY" ] && break
         fi
     done
-    # Fallback: ip-api.com (free, no key, ~45 req/min limit)
-    if [ -z "$COUNTRY" ] && command -v curl &>/dev/null; then
-        COUNTRY=$(curl -s --connect-timeout 2 --max-time 4 "http://ip-api.com/json/$(urlencode_ip "$IP")?fields=countryCode" 2>/dev/null | grep -o '"countryCode":"[A-Z]*"' | cut -d'"' -f4)
-    fi
+    # Local database only (no ip-api.com): a network lookup per ban stalls the queue,
+    # and its rate limit made lookups fail under attack.
     if [ -n "$COUNTRY" ]; then
         IS_WHITELISTED=0
         for c in $(echo "$WHITELIST_COUNTRIES" | tr ',' ' '); do
@@ -115,11 +110,6 @@ if [ "$SKIP_WHITELIST" != "1" ] && [ -n "$WHITELIST_COUNTRIES" ]; then
                     ORG_RAW=$(whois "$IP" 2>/dev/null)
                     ORG=$(echo "$ORG_RAW" | grep -m1 -E '^OrgName:|^Organization:' | sed 's/^[^:]*:[ \t]*//' | sed 's/ ([A-Z0-9]*)$//' | tr -d '\n')
                 fi
-                # Fallback: ip-api.com
-                if [ -z "$ORG" ] && command -v curl &>/dev/null; then
-                    ORG_RAW=$(curl -s --connect-timeout 2 --max-time 4 "http://ip-api.com/json/$(urlencode_ip "$IP")?fields=org,isp" 2>/dev/null)
-                    ORG=$(echo "$ORG_RAW" | grep -oE '"(org|isp)":"[^"]*"' | cut -d'"' -f4 | tr '\n' ' ')
-                fi
                 for bl in $(echo "$BLOCKED_ORGANIZATIONS" | tr ',' ' '); do
                     bl=$(echo "$bl" | tr -d ' ')
                     [ -z "$bl" ] && continue
@@ -132,8 +122,10 @@ if [ "$SKIP_WHITELIST" != "1" ] && [ -n "$WHITELIST_COUNTRIES" ]; then
             [ "$SKIP_BAN" = "1" ] && exit 0
         fi
     else
-        # Country lookup failed - skip ban to avoid blocking whitelisted countries
-        exit 0
+        # Country unknown (not in the local IP2Location database). It cannot be shown to be
+        # whitelisted, so the default is to ban. Set UNKNOWN_COUNTRY_ACTION=skip in
+        # conf.d/whitelist-countries.conf to exempt these IPs instead.
+        [ "${UNKNOWN_COUNTRY_ACTION:-ban}" = "skip" ] && exit 0
     fi
 fi
 

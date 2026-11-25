@@ -3,6 +3,8 @@
 ## [Unreleased]
 
 ### Performance
+- Country and organisation checks use only the local IP2Location databases. The ip-api.com fallback is removed from `csf-ban-process.sh` and `cms-allow.sh`. `cms-allow.sh` runs as fail2ban's `ignorecommand` on every matching log line, so it made one network call per line; its free-tier rate limit also made lookups fail under attack.
+- **Behaviour change:** an IP that is not in the local database is now banned by default. Before, a failed lookup skipped the ban. To keep the old behaviour, set `UNKNOWN_COUNTRY_ACTION=skip` in `conf.d/whitelist-countries.conf`. Servers without the IP2Location database should set this to `skip` if they rely on the country whitelist.
 - Ban processing moved out of fail2ban's action thread. `csf-ban.sh` and `csf-unban.sh` now only append a line to a queue (`/var/spool/fail2ban-whm/queue`) and return. The new `f2b-ban-worker` systemd service applies the queue in the background (`csf-ban-process.sh` does the country/org check, domain comment, ipset block, CSF record and email). Previously each ban blocked detection of the other IPs while its lookups and `csf -d` ran.
 - Bans are applied to an `ipset` set (`f2b-bans`) with one iptables DROP rule, so a ban takes effect immediately instead of waiting on `csf -d` (which rebuilds the CSF firewall on every call). CSF's deny list is still updated for WHM and `csf -g`.
 - Unbans go through the new `csf-unban.sh`, which removes the IP from the set as well as CSF.
