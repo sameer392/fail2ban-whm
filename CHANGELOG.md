@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.0.12] - 2026-11-26
+
+### Fixed
+- Organisation names with spaces (e.g. `Microsoft Corporation`) were saved to `blocklist-organizations.conf` unquoted. The ban script loaded that file as shell code, so every ban printed errors and the name never matched. The plugin now saves the value quoted and reads it back without the quotes.
+
+### Performance
+- The WHM plugin's Banned IPs tab no longer waits on the network. Country and organisation come only from the local IP2Location databases. WHOIS and ip-api.com are no longer called while the page renders, and unknown IPs are retried on the next load instead of being cached as unknown.
+- Affected domains come from the domain comment in `csf.deny`. The domlog scan that ran for each row is no longer part of the page.
+- `csf.deny` is read once per page load, not once per row.
+
 ## [1.0.11] - 2026-11-26
 
 ### Fixed
