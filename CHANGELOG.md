@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.0.15] - 2026-11-26
+
+### Fixed
+- The Country column in the Banned IPs table showed `-` for every row. The lookup passed the database path as one argument, so the country was never found. Each key is now passed separately. Bans were not affected, because the ban decision uses its own lookup.
+
 ## [1.0.14] - 2026-11-26
 
 ### Fixed
