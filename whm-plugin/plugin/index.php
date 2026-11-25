@@ -150,33 +150,9 @@ function get_ip_org($ip, &$cache = []) {
             $out = [];
         }
     }
-    // 3. Try local whois (system tool, queries RIRs - no third-party API) - 2s timeout
-    if (function_exists('exec')) {
-        $out = [];
-        @exec("timeout 2 whois " . escapeshellarg($ip) . " 2>/dev/null", $out, $ret);
-        $text = implode("\n", $out);
-        if (preg_match('/^OrgName:\s*(.+)$/m', $text, $m)) $org = trim($m[1]);
-        elseif (preg_match('/^Organization:\s*([^(]+)/m', $text, $m)) $org = trim($m[1]);
-        elseif (preg_match('/^netname:\s*(.+)$/mi', $text, $m)) $org = trim($m[1]);
-        elseif (preg_match('/^descr:\s*(.+)$/mi', $text, $m)) $org = trim($m[1]);
-    }
-    // 4. Fallback: remote API (ip-api.com) only when whois fails
-    if ($org === '' && (function_exists('file_get_contents') && ini_get('allow_url_fopen') || function_exists('curl_init'))) {
-        if (function_exists('file_get_contents') && ini_get('allow_url_fopen')) {
-            $json = @file_get_contents("http://ip-api.com/json/" . urlencode($ip) . "?fields=org,isp", false, stream_context_create(['http' => ['timeout' => 2]]));
-        } else {
-            $ch = curl_init("http://ip-api.com/json/" . urlencode($ip) . "?fields=org,isp");
-            curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 2]);
-            $json = @curl_exec($ch);
-            curl_close($ch);
-        }
-        if (!empty($json)) {
-            if (preg_match('/"org":"([^"]*)"/', $json, $m) && trim($m[1]) !== '') $org = trim($m[1]);
-            elseif (preg_match('/"isp":"([^"]*)"/', $json, $m) && trim($m[1]) !== '') $org = trim($m[1]);
-        }
-    }
-    $org = $org ?: '-';
-    // 5. Store in SQLite for future lookups (all sources cached)
+    // No WHOIS or remote API while the page renders (both can take seconds per row).
+    // Only results from the local database are cached; unknown IPs show '-' and are looked up again next time.
+    if ($org === '') return $cache[$ip] = '-';
     if ($pdo) {
         $stmt = $pdo->prepare("INSERT OR REPLACE INTO ip_org (ip, org, updated_at) VALUES (?, ?, ?)");
         if ($stmt) @$stmt->execute([$ip, $org, time()]);
@@ -209,40 +185,36 @@ function get_ip_country($ip, &$cache = []) {
             }
         }
     }
-    if ($country === '') {
-        if (function_exists('file_get_contents') && ini_get('allow_url_fopen')) {
-            $json = @file_get_contents("http://ip-api.com/json/" . urlencode($ip) . "?fields=countryCode", false, stream_context_create(['http' => ['timeout' => 2]]));
-            if ($json && preg_match('/"countryCode":"([A-Z]{2})"/', $json, $m)) $country = $m[1];
-        } elseif (function_exists('curl_init')) {
-            $ch = curl_init("http://ip-api.com/json/" . urlencode($ip) . "?fields=countryCode");
-            curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 2]);
-            $json = @curl_exec($ch);
-            curl_close($ch);
-            if ($json && preg_match('/"countryCode":"([A-Z]{2})"/', $json, $m)) $country = $m[1];
+    // Local database only: no network call while the page renders. Unknown IPs are not cached.
+    if ($country !== '') {
+        if ($pdo) {
+            $stmt = $pdo->prepare("INSERT OR REPLACE INTO ip_country (ip, country, updated_at) VALUES (?, ?, ?)");
+            if ($stmt) $stmt->execute([$ip, $country, time()]);
         }
+        return $cache[$ip] = $country;
     }
-    $country = $country ?: '-';
-    if ($pdo) {
-        $stmt = $pdo->prepare("INSERT OR REPLACE INTO ip_country (ip, country, updated_at) VALUES (?, ?, ?)");
-        if ($stmt) $stmt->execute([$ip, $country, time()]);
-    }
-    return $cache[$ip] = $country;
+    return $cache[$ip] = '-';
 }
 
-function get_affected_domains($ip, $jail, &$cache = []) {
+// $allow_grep: scan the domlogs when csf.deny has no domain comment. Off on the page (too slow per row);
+// the domain comment is written when the IP is banned, so the table normally gets it from csf.deny.
+function get_affected_domains($ip, $jail, &$cache = [], $allow_grep = false) {
     if (!filter_var($ip, FILTER_VALIDATE_IP)) return '';
     $key = $ip . ':' . $jail;
     if (isset($cache[$key])) return $cache[$key];
     $domains = '';
-    $csf_deny = '/etc/csf/csf.deny';
-    if (is_readable($csf_deny)) {
-        $content = file_get_contents($csf_deny);
+    static $deny_content = null;
+    if ($deny_content === null) {
+        $csf_deny = '/etc/csf/csf.deny';
+        $deny_content = is_readable($csf_deny) ? (string)file_get_contents($csf_deny) : '';
+    }
+    if ($deny_content !== '') {
         $ip_esc = preg_quote($ip, '/');
-        if (preg_match('/^' . $ip_esc . '\s+#\s*Fail2Ban\s+' . preg_quote($jail, '/') . '\s+-\s*(.+)$/m', $content, $m)) {
+        if (preg_match('/^' . $ip_esc . '\s+#\s*Fail2Ban\s+' . preg_quote($jail, '/') . '\s+-\s*(.+)$/m', $deny_content, $m)) {
             $domains = trim(preg_replace('/\s+/', ' ', $m[1]));
         }
     }
-    if ($domains === '' && is_dir('/usr/local/apache/domlogs')) {
+    if ($domains === '' && $allow_grep && is_dir('/usr/local/apache/domlogs')) {
         $files = [];
         // $ip is a validated IP (dots escaped for grep -E); escapeshellarg keeps the shell out of it
         @exec("timeout 2 grep -lE " . escapeshellarg('^' . str_replace('.', '\\.', $ip) . ' ') . " /usr/local/apache/domlogs/*/* 2>/dev/null", $files);
