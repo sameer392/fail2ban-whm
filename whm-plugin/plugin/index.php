@@ -176,9 +176,11 @@ function get_ip_country($ip, &$cache = []) {
     }
     $mmdb = '/etc/fail2ban/GeoIP/IP2LOCATION-LITE-DB1.mmdb';
     if (file_exists($mmdb)) {
-        foreach (['country iso_code', 'country_code'] as $path) {
+        // Each key of the lookup path is its own argument: mmdblookup needs "country" and "iso_code" separately
+        foreach ([['country', 'iso_code']] as $path) {
             $out = [];
-            exec("mmdblookup -f " . escapeshellarg($mmdb) . " -i " . escapeshellarg($ip) . " " . escapeshellarg($path) . " 2>/dev/null", $out, $ret);
+            $keys = implode(' ', array_map('escapeshellarg', $path));
+            exec("mmdblookup -f " . escapeshellarg($mmdb) . " -i " . escapeshellarg($ip) . " " . $keys . " 2>/dev/null", $out, $ret);
             if ($ret === 0 && preg_match('/"([A-Z]{2})"/', implode(' ', $out), $m)) {
                 $country = $m[1];
                 break;
