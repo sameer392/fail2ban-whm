@@ -24,6 +24,7 @@ F2B_ACTIONS=(
    /etc/fail2ban/scripts/csf-ban-process.sh
    /etc/fail2ban/scripts/f2b-queue.sh
    /etc/fail2ban/scripts/f2b-ban-worker.sh
+   /etc/fail2ban/scripts/f2b-lookup.sh
    /etc/fail2ban/scripts/cms-allow.sh
    /etc/fail2ban/conf.d/whitelist-countries.conf
    /etc/fail2ban/conf.d/blocklist-organizations.conf
