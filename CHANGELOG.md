@@ -1,6 +1,9 @@
 # Changelog
 
 ## [Unreleased]
+### Security
+- WHM plugin: every POST request now needs a CSRF token (`csrf_token` form field or `X-CSRF-Token` header). Requests without a valid token are rejected before any action runs. This covers unban, whitelist and blacklist changes, jail settings, update and reload actions. The token is derived from a root-only key in `/var/lib/fail2ban-whm/csrf.key`, which is created on first use.
+- The two AJAX actions that change state (`clean_expired_bips` and `apply_blacklist_log`) were GET requests. They are now POST-only and send the token.
 
 ### Changed
 - `jail.local` is created once by `install.sh` / `update.sh` (empty) and is never overwritten. Put per-server values such as `maxretry` there. Upgrades copy `jail.d/*.conf` from the repo, so values edited in those files are reset on every update. `update.sh` backs up `jail.local` with the other jail files.

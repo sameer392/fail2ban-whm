@@ -24,6 +24,45 @@ function checkacl($acl) {
     return false;
 }
 
+// CSRF protection: a server-side secret (root-only file) is used to derive a token.
+// The token is placed in every POST form; POST requests without a valid token are rejected.
+function f2b_csrf_key() {
+    $dir = '/var/lib/fail2ban-whm';
+    $file = $dir . '/csrf.key';
+    if (!is_file($file)) {
+        if (!is_dir($dir)) @mkdir($dir, 0700, true);
+        @file_put_contents($file, bin2hex(random_bytes(32)));
+        @chmod($file, 0600);
+    }
+    return trim((string)@file_get_contents($file));
+}
+
+function f2b_csrf_token() {
+    $key = f2b_csrf_key();
+    return $key === '' ? '' : hash_hmac('sha256', 'f2b-whm-csrf', $key);
+}
+
+// Adds the token as a hidden field to every POST form in the page (not to AJAX/JSON responses).
+function f2b_csrf_inject($html) {
+    $token = f2b_csrf_token();
+    if ($token === '') return $html;
+    $html = preg_replace_callback(
+        '/<form\b[^>]*\bmethod=["\']?post["\']?[^>]*>/i',
+        function ($m) use ($token) {
+            return $m[0] . '<input type="hidden" name="csrf_token" value="' . htmlspecialchars($token, ENT_QUOTES) . '">';
+        },
+        $html
+    );
+    // Token for the page's own AJAX calls (read by csrfToken() in the page script)
+    $head = '<meta name="f2b-csrf" content="' . htmlspecialchars($token, ENT_QUOTES) . '">'
+          . '<script>function csrfToken(){var m=document.querySelector(\'meta[name="f2b-csrf"]\');return m?m.content:"";}</script>';
+    $pos = stripos($html, '</head>');
+    if ($pos !== false) {
+        $html = substr_replace($html, $head, $pos, 0);
+    }
+    return $html;
+}
+
 function parse_cms_allow_conf($path) {
     $rules = [];
     if (!is_readable($path)) return $rules;
@@ -540,6 +579,29 @@ if (!checkacl('all')) {
     exit;
 }
 
+// Reject any POST that does not carry the server's CSRF token (checked before any action runs)
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $expected = f2b_csrf_token();
+    $given = (string)($_POST['csrf_token'] ?? ($_SERVER['HTTP_X_CSRF_TOKEN'] ?? ''));
+    if ($expected === '' || !hash_equals($expected, $given)) {
+        if (isset($_SERVER['HTTP_X_REQUESTED_WITH'])) {
+            header('Content-Type: application/json');
+            http_response_code(403);
+            echo json_encode(['ok' => false, 'msg' => 'Security token missing or invalid. Reload the page and try again.']);
+        } else {
+            WHM::header('Fail2Ban Manager - Request rejected', 0, 0);
+            echo '<p class="alert alert-danger">Request rejected: security token missing or invalid. Reload the page and try again.</p>';
+            WHM::footer();
+        }
+        exit;
+    }
+}
+
+// Inject the token into forms on normal page loads only
+if (!isset($_SERVER['HTTP_X_REQUESTED_WITH'])) {
+    ob_start('f2b_csrf_inject');
+}
+
 $msg = '';
 $action = $_POST['action'] ?? $_GET['action'] ?? '';
 $current_tab = $_GET['tab'] ?? $_POST['tab'] ?? 'dashboard';
@@ -1044,8 +1106,8 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'ip_log_details' && isset($_GET['i
     exit;
 }
 
-// AJAX: cleanup expired bips from DB
-if (isset($_GET['ajax']) && $_GET['ajax'] === 'clean_expired_bips') {
+// AJAX: cleanup expired bips from DB (POST only; token is checked above)
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'clean_expired_bips' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     header('Content-Type: application/json; charset=utf-8');
     $deleted = 0;
     $ok = function_exists('checkacl') && checkacl('all') && cleanup_expired_bips($deleted);
@@ -1094,8 +1156,8 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'csf_grep' && isset($_GET['ip'])) 
     exit;
 }
 
-// AJAX: apply blacklist log (real-time reference)
-if (isset($_GET['ajax']) && $_GET['ajax'] === 'apply_blacklist_log') {
+// AJAX: apply blacklist log (real-time reference; POST only, token checked above)
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'apply_blacklist_log' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     header('Content-Type: application/json; charset=utf-8');
     $log_path = '/tmp/apply-blacklist.log';
     $content = '';
@@ -1868,7 +1930,7 @@ document.addEventListener('DOMContentLoaded', function() {
   var applyLogPollTimer = null;
   var applyLogPollUntil = 0;
   function fetchApplyBlacklistLog(cb) {
-    fetch(base + '?ajax=apply_blacklist_log', { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+    fetch(base + '?ajax=apply_blacklist_log', { method: 'POST', credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': csrfToken() } })
       .then(function(r) { return r.json(); })
       .then(function(data) {
         var el = document.getElementById('apply-blacklist-log-content');
@@ -2217,7 +2279,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (cleanBtn) {
       e.preventDefault();
       cleanBtn.disabled = true;
-      fetch(base + '?ajax=clean_expired_bips', { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+      fetch(base + '?ajax=clean_expired_bips', { method: 'POST', credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': csrfToken() } })
         .then(function(r) { return r.json(); })
         .then(function(data) {
           showMsg(data.msg || 'Done.', !data.ok);
