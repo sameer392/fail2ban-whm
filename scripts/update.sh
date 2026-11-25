@@ -136,6 +136,8 @@ for old in /etc/fail2ban/jail.d/apache-ua-*.conf /etc/fail2ban/filter.d/apache-u
    base=$(basename "$old" .conf)
    [ "$base" = "apache-ua-keywords" ] || rm -f "$old"
 done
+# Email settings hold the SMTP password: keep them owner-only
+[ -f /etc/fail2ban/conf.d/email-alerts.conf ] && chown root:root /etc/fail2ban/conf.d/email-alerts.conf && chmod 600 /etc/fail2ban/conf.d/email-alerts.conf
 # Per-server overrides: jail.local is created once and never overwritten by upgrades.
 # fail2ban reads it after jail.d/, so its values win over the repo defaults.
 if [ ! -f /etc/fail2ban/jail.local ]; then

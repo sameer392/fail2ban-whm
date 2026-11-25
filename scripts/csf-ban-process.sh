@@ -129,8 +129,11 @@ f2b_ipset_add "$IP"
 f2b_timeout 60 /usr/sbin/csf -d "$IP" "$COMMENT"
 
 # Optional: send email alert on ban (SMTP)
-EMAIL_CONF="${SCRIPT_DIR}/email-alerts.conf"
-if [ -f "$EMAIL_CONF" ] && [ -r "$EMAIL_CONF" ]; then
+# Settings are saved by the WHM plugin to conf.d; the scripts-dir copy is a fallback for older installs.
+EMAIL_CONF="/etc/fail2ban/conf.d/email-alerts.conf"
+[ -f "$EMAIL_CONF" ] || EMAIL_CONF="${SCRIPT_DIR}/email-alerts.conf"
+# The file holds the SMTP password: only load it if it is root-owned and mode 600
+if [ -f "$EMAIL_CONF" ] && [ -r "$EMAIL_CONF" ] && [ "$(stat -c '%a %U' "$EMAIL_CONF" 2>/dev/null)" = "600 root" ]; then
     . "$EMAIL_CONF"
     if [ "${ENABLED:-0}" = "1" ] && [ -n "$EMAIL_TO" ] && [ -n "$SMTP_HOST" ] && command -v curl &>/dev/null; then
         SUBJ="[Fail2Ban] $IP banned ($JAIL)"

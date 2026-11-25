@@ -120,6 +120,8 @@ done
 [ -x /etc/fail2ban/scripts/generate-logpath.sh ] && /etc/fail2ban/scripts/generate-logpath.sh || true
 # Regenerate combined UA jail from conf.d/useragent-keywords.conf
 [ -x /etc/fail2ban/scripts/update-useragent-jails.sh ] && /etc/fail2ban/scripts/update-useragent-jails.sh || true
+# Email settings hold the SMTP password: keep them owner-only
+[ -f /etc/fail2ban/conf.d/email-alerts.conf ] && chown root:root /etc/fail2ban/conf.d/email-alerts.conf && chmod 600 /etc/fail2ban/conf.d/email-alerts.conf
 # Per-server overrides: jail.local is created once and never overwritten by upgrades.
 # fail2ban reads it after jail.d/, so its values win over the repo defaults.
 if [ ! -f /etc/fail2ban/jail.local ]; then

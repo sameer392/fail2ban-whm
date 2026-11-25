@@ -951,7 +951,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action) {
         $content .= "SMTP_SECURE=" . $smtp_secure . "\n";
         $content .= "EMAIL_FROM=" . preg_replace('/[\r\n]/', '', $email_from) . "\n";
         $content .= "EMAIL_TO=" . preg_replace('/[\r\n]/', '', $email_to) . "\n";
-        if (file_put_contents($conf, $content) !== false) {
+        // Create the file owner-only, so the SMTP password is never readable by others, even briefly
+        $old_umask = umask(0077);
+        $written = file_put_contents($conf, $content);
+        umask($old_umask);
+        if ($written !== false) {
             chmod($conf, 0600);
             $msg = $enabled && $email_to ? "Email alerts (SMTP) saved. Alerts will be sent to $email_to." : ($enabled ? "SMTP config saved. Add recipient email and enable." : "Email alerts disabled.");
         } else {
