@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Performance
+- Ban processing moved out of fail2ban's action thread. `csf-ban.sh` and `csf-unban.sh` now only append a line to a queue (`/var/spool/fail2ban-whm/queue`) and return. The new `f2b-ban-worker` systemd service applies the queue in the background (`csf-ban-process.sh` does the country/org check, domain comment, ipset block, CSF record and email). Previously each ban blocked detection of the other IPs while its lookups and `csf -d` ran.
 - Bans are applied to an `ipset` set (`f2b-bans`) with one iptables DROP rule, so a ban takes effect immediately instead of waiting on `csf -d` (which rebuilds the CSF firewall on every call). CSF's deny list is still updated for WHM and `csf -g`.
 - Unbans go through the new `csf-unban.sh`, which removes the IP from the set as well as CSF.
 - After a reboot, `f2b-ipset.sh restore` (run as the action's `actionstart`) reloads Fail2Ban bans from `csf.deny`.

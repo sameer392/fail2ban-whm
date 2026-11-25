@@ -1,0 +1,176 @@
+#!/bin/bash
+# Fail2Ban CSF ban helper - adds IP to csf.deny with jail name and affected domain(s)
+# Country whitelist (whitelist-countries.conf) applies ONLY to apache-high-volume.
+# All other jails (wordpress-wp-login, apache-ua-*, etc.) always ban regardless of country.
+# Exceptions for apache-high-volume: blacklisted orgs, multi-domain abuse override whitelist.
+# Usage: csf-ban-process.sh <ip> <jail_name>   (run by f2b-ban-worker.sh, not by fail2ban directly)
+# Comment format: Fail2Ban <jail> - <domain1, domain2, ...>
+
+IP="$1"
+JAIL="$2"
+SCRIPT_DIR="$(dirname "$0")"
+CONFIG="/etc/fail2ban/conf.d/whitelist-countries.conf"
+BLOCKLIST_CONFIG="/etc/fail2ban/conf.d/blocklist-organizations.conf"
+DOMLOGS="${DOMLOGS:-/usr/local/apache/domlogs}"
+
+[ -z "$IP" ] || [ -z "$JAIL" ] && exit 1
+[ -f "${SCRIPT_DIR}/f2b-ipset.sh" ] && . "${SCRIPT_DIR}/f2b-ipset.sh"
+
+# Skip private/local IPv4
+[[ "$IP" =~ ^(127\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.) ]] && exit 0
+# Skip loopback, link-local, ULA, IPv4-mapped IPv6
+[[ "$IP" == "::1" ]] && exit 0
+[[ "$IP" == fe80:* || "$IP" == FE80:* ]] && exit 0
+[[ "$IP" == fc* || "$IP" == fd* || "$IP" == FC* || "$IP" == FD* ]] && exit 0
+[[ "$IP" == ::ffff:* || "$IP" == ::FFFF:* ]] && exit 0
+
+# Optional IPv6: skip unless ENABLE_IPV6=1 (IPv4-only servers stay IPv4)
+if [[ "$IP" == *:* ]]; then
+    ENABLE_IPV6=0
+    [ -f /etc/fail2ban/conf.d/ipv6.conf ] && . /etc/fail2ban/conf.d/ipv6.conf
+    [ "${ENABLE_IPV6:-0}" != "1" ] && exit 0
+fi
+
+urlencode_ip() {
+    python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1], safe=""))' "$1" 2>/dev/null || printf '%s' "$1"
+}
+
+# CMS / editor path allow list (WHM → Whitelists). Sourced for country-scoped patterns.
+[ -f "${SCRIPT_DIR}/cms-allow.sh" ] && . "${SCRIPT_DIR}/cms-allow.sh"
+
+# Country whitelist applies ONLY to apache-high-volume; all other jails always ban
+[[ "$JAIL" == apache-high-volume ]] && SKIP_WHITELIST=0 || SKIP_WHITELIST=1
+
+# Find domains that had traffic from this IP (needed for comment and multi-domain check)
+DOMAINS=""
+DOMAIN_COUNT=0
+SCANNER_DOMAIN_COUNT=0
+if [ -d "$DOMLOGS" ]; then
+    IP_ESC=$(printf '%s' "$IP" | sed 's/[.[\*^$]/\\&/g')
+    DOMAINS=$(grep -lE "^${IP_ESC} " "$DOMLOGS"/*/* 2>/dev/null | grep -vE 'bytes_log$|ftp_log$|placeholder' | while read -r f; do
+        basename "$f" | sed 's/-ssl_log$//'
+    done | sort -u | tr '\n' ',' | sed 's/,$//; s/,/, /g')
+    [ -n "$DOMAINS" ] && DOMAIN_COUNT=$(echo "$DOMAINS" | tr ',' '\n' | wc -l)
+    SCANNER_DOMAIN_COUNT=$DOMAIN_COUNT
+fi
+
+# Load ignored countries
+WHITELIST_COUNTRIES=""
+[ -f "$CONFIG" ] && . "$CONFIG"
+
+# Load blocklist and multi-domain threshold
+BLOCKED_ORGANIZATIONS=""
+MULTI_DOMAIN_ABUSE_THRESHOLD=0
+[ -f "$BLOCKLIST_CONFIG" ] && . "$BLOCKLIST_CONFIG"
+
+# Check country and skip if whitelisted (with exceptions) - skip for apache-ua-* jails
+SKIP_BAN=0
+if [ "$SKIP_WHITELIST" != "1" ] && [ -n "$WHITELIST_COUNTRIES" ]; then
+    COUNTRY=""
+    # IP2Location LITE DB1 (country lookup via mmdblookup)
+    for db in /etc/fail2ban/GeoIP/IP2LOCATION-LITE-DB1.mmdb; do
+        if [ -f "$db" ] && command -v mmdblookup &>/dev/null; then
+            COUNTRY=$(mmdblookup -f "$db" -i "$IP" country iso_code 2>/dev/null | awk -F'"' '$2 ~ /^[A-Z]{2}$/ {print $2; exit}')
+            [ -n "$COUNTRY" ] && break
+        fi
+    done
+    # Fallback: ip-api.com (free, no key, ~45 req/min limit)
+    if [ -z "$COUNTRY" ] && command -v curl &>/dev/null; then
+        COUNTRY=$(curl -s --connect-timeout 2 --max-time 4 "http://ip-api.com/json/$(urlencode_ip "$IP")?fields=countryCode" 2>/dev/null | grep -o '"countryCode":"[A-Z]*"' | cut -d'"' -f4)
+    fi
+    if [ -n "$COUNTRY" ]; then
+        IS_WHITELISTED=0
+        for c in $(echo "$WHITELIST_COUNTRIES" | tr ',' ' '); do
+            c=$(echo "$c" | tr -d ' ')
+            [ "$COUNTRY" = "$c" ] && { IS_WHITELISTED=1; break; }
+        done
+        if [ "$IS_WHITELISTED" = "1" ]; then
+            SKIP_BAN=1
+            # Exception 1: Multi-domain abuse - scanning many domains (CMS paths from
+            # cms-allow.conf for this country are not counted).
+            if [ "$JAIL" = "apache-high-volume" ] && type cms_allow_pattern_regex &>/dev/null; then
+                EDITOR_RE=$(cms_allow_pattern_regex "$COUNTRY")
+                SCANNER_DOMAINS=$(cms_allow_scanner_domains "$IP" "$EDITOR_RE")
+                SCANNER_DOMAIN_COUNT=0
+                [ -n "$SCANNER_DOMAINS" ] && SCANNER_DOMAIN_COUNT=$(printf '%s\n' "$SCANNER_DOMAINS" | grep -c .)
+            fi
+            if [ -n "$MULTI_DOMAIN_ABUSE_THRESHOLD" ] && [ "$MULTI_DOMAIN_ABUSE_THRESHOLD" -gt 0 ] 2>/dev/null; then
+                if [ "$SCANNER_DOMAIN_COUNT" -ge "$MULTI_DOMAIN_ABUSE_THRESHOLD" ] 2>/dev/null; then
+                    SKIP_BAN=0
+                fi
+            fi
+            # Exception 2: Blacklisted organization - ban Microsoft, DigitalOcean, etc.
+            if [ "$SKIP_BAN" = "1" ] && [ -n "$BLOCKED_ORGANIZATIONS" ]; then
+                ORG=""
+                # Prefer local mmdb (IP2Location LITE ASN)
+                ASN_MMDB="/etc/fail2ban/GeoIP/IP2LOCATION-LITE-ASN.mmdb"
+                if [ -f "$ASN_MMDB" ] && command -v mmdblookup &>/dev/null; then
+                    for path in "as" "autonomous_system_organization" "organization"; do
+                        ORG=$(mmdblookup -f "$ASN_MMDB" -i "$IP" "$path" 2>/dev/null | grep -m1 'utf8_string' | sed 's/.*"\([^"]*\)".*/\1/')
+                        [ -n "$ORG" ] && [ "$ORG" != "-" ] && break
+                    done
+                fi
+                # Fallback: local whois
+                if [ -z "$ORG" ] && command -v whois &>/dev/null; then
+                    ORG_RAW=$(whois "$IP" 2>/dev/null)
+                    ORG=$(echo "$ORG_RAW" | grep -m1 -E '^OrgName:|^Organization:' | sed 's/^[^:]*:[ \t]*//' | sed 's/ ([A-Z0-9]*)$//' | tr -d '\n')
+                fi
+                # Fallback: ip-api.com
+                if [ -z "$ORG" ] && command -v curl &>/dev/null; then
+                    ORG_RAW=$(curl -s --connect-timeout 2 --max-time 4 "http://ip-api.com/json/$(urlencode_ip "$IP")?fields=org,isp" 2>/dev/null)
+                    ORG=$(echo "$ORG_RAW" | grep -oE '"(org|isp)":"[^"]*"' | cut -d'"' -f4 | tr '\n' ' ')
+                fi
+                for bl in $(echo "$BLOCKED_ORGANIZATIONS" | tr ',' ' '); do
+                    bl=$(echo "$bl" | tr -d ' ')
+                    [ -z "$bl" ] && continue
+                    if echo "$ORG" | grep -qiF "$bl"; then
+                        SKIP_BAN=0
+                        break
+                    fi
+                done
+            fi
+            [ "$SKIP_BAN" = "1" ] && exit 0
+        fi
+    else
+        # Country lookup failed - skip ban to avoid blocking whitelisted countries
+        exit 0
+    fi
+fi
+
+# Build comment
+if [ -n "$DOMAINS" ]; then
+    COMMENT="Fail2Ban ${JAIL} - ${DOMAINS}"
+else
+    COMMENT="Fail2Ban ${JAIL}"
+fi
+
+COMMENT=$(echo "$COMMENT" | head -c 200)
+# Block at once via ipset; CSF call below is only for its deny list / WHM view
+f2b_ipset_add "$IP"
+/usr/sbin/csf -d "$IP" "$COMMENT"
+
+# Optional: send email alert on ban (SMTP)
+EMAIL_CONF="${SCRIPT_DIR}/email-alerts.conf"
+if [ -f "$EMAIL_CONF" ] && [ -r "$EMAIL_CONF" ]; then
+    . "$EMAIL_CONF"
+    if [ "${ENABLED:-0}" = "1" ] && [ -n "$EMAIL_TO" ] && [ -n "$SMTP_HOST" ] && command -v curl &>/dev/null; then
+        SUBJ="[Fail2Ban] $IP banned ($JAIL)"
+        BODY="IP $IP was banned by Fail2Ban (jail: $JAIL). Domains: ${DOMAINS:--}. $(date)"
+        FROM="${EMAIL_FROM:-fail2ban@localhost}"
+        MSG="From: $FROM
+To: $EMAIL_TO
+Subject: $SUBJ
+
+$BODY"
+        case "${SMTP_SECURE:-tls}" in
+            ssl) PORT="${SMTP_PORT:-465}" ; URL="smtps://${SMTP_HOST}:${PORT}" ; EXTRA="" ;;
+            tls) PORT="${SMTP_PORT:-587}" ; URL="smtp://${SMTP_HOST}:${PORT}" ; EXTRA="--ssl-reqd" ;;
+            *)   PORT="${SMTP_PORT:-25}"  ; URL="smtp://${SMTP_HOST}:${PORT}" ; EXTRA="" ;;
+        esac
+        if [ -n "$SMTP_USER" ] && [ -n "$SMTP_PASS" ]; then
+            echo "$MSG" | curl -s --connect-timeout 10 --max-time 30 --url "$URL" --mail-from "$FROM" --mail-rcpt "$EMAIL_TO" --user "$SMTP_USER:$SMTP_PASS" $EXTRA -T - 2>/dev/null
+        else
+            echo "$MSG" | curl -s --connect-timeout 10 --max-time 30 --url "$URL" --mail-from "$FROM" --mail-rcpt "$EMAIL_TO" $EXTRA -T - 2>/dev/null
+        fi
+    fi
+fi

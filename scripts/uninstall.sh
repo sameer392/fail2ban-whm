@@ -21,6 +21,9 @@ F2B_ACTIONS=(
    /etc/fail2ban/scripts/csf-ban.sh
    /etc/fail2ban/scripts/csf-unban.sh
    /etc/fail2ban/scripts/f2b-ipset.sh
+   /etc/fail2ban/scripts/csf-ban-process.sh
+   /etc/fail2ban/scripts/f2b-queue.sh
+   /etc/fail2ban/scripts/f2b-ban-worker.sh
    /etc/fail2ban/scripts/cms-allow.sh
    /etc/fail2ban/conf.d/whitelist-countries.conf
    /etc/fail2ban/conf.d/blocklist-organizations.conf
@@ -55,6 +58,8 @@ echo
 
 # 1. Stop fail2ban (needed to remove config cleanly)
 echo "[1/4] Stopping fail2ban..."
+systemctl disable --now f2b-ban-worker 2>/dev/null || true
+rm -f /etc/systemd/system/f2b-ban-worker.service
 if systemctl is-active --quiet fail2ban 2>/dev/null; then
    systemctl stop fail2ban
    echo "      fail2ban stopped."

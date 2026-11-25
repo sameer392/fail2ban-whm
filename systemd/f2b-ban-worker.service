@@ -1,0 +1,12 @@
+[Unit]
+Description=Fail2Ban ban queue worker (ipset block and CSF deny list)
+After=network.target fail2ban.service
+
+[Service]
+Type=simple
+ExecStart=/etc/fail2ban/scripts/f2b-ban-worker.sh
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

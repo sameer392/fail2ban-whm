@@ -96,6 +96,8 @@ mkdir -p /etc/fail2ban/scripts
 [ -f "$CONFIG_DIR/scripts/csf-ban.sh" ] && cp -f "$CONFIG_DIR/scripts/csf-ban.sh" /etc/fail2ban/scripts/ && chmod +x /etc/fail2ban/scripts/csf-ban.sh
 [ -f "$CONFIG_DIR/scripts/f2b-ipset.sh" ] && cp -f "$CONFIG_DIR/scripts/f2b-ipset.sh" /etc/fail2ban/scripts/ && chmod +x /etc/fail2ban/scripts/f2b-ipset.sh
 [ -f "$CONFIG_DIR/scripts/csf-unban.sh" ] && cp -f "$CONFIG_DIR/scripts/csf-unban.sh" /etc/fail2ban/scripts/ && chmod +x /etc/fail2ban/scripts/csf-unban.sh
+for _s in csf-ban-process.sh f2b-queue.sh f2b-ban-worker.sh; do [ -f "$CONFIG_DIR/scripts/$_s" ] && cp -f "$CONFIG_DIR/scripts/$_s" /etc/fail2ban/scripts/ && chmod +x "/etc/fail2ban/scripts/$_s"; done
+[ -f "$CONFIG_DIR/systemd/f2b-ban-worker.service" ] && cp -f "$CONFIG_DIR/systemd/f2b-ban-worker.service" /etc/systemd/system/ && systemctl daemon-reload && systemctl enable --now f2b-ban-worker || true
 [ -f "$CONFIG_DIR/scripts/cms-allow.sh" ] && cp -f "$CONFIG_DIR/scripts/cms-allow.sh" /etc/fail2ban/scripts/ && chmod +x /etc/fail2ban/scripts/cms-allow.sh
 mkdir -p /etc/fail2ban/conf.d
 # User configs (conf.d): copy only if not exists - preserve user settings across updates
