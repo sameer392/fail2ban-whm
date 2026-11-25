@@ -36,10 +36,10 @@ echo "[1/5] Backing up current config..."
 mkdir -p "$BACKUP_DIR"
 BKP="$BACKUP_DIR/$TIMESTAMP"
 mkdir -p "$BKP/filter.d" "$BKP/jail.d" "$BKP/fail2ban.d" "$BKP/scripts" "$BKP/conf.d"
-for f in /etc/fail2ban/filter.d/wordpress-wp-login.conf /etc/fail2ban/filter.d/apache-high-volume.conf /etc/fail2ban/filter.d/apache-ua-keywords.conf; do
+for f in /etc/fail2ban/filter.d/wordpress-wp-login.conf /etc/fail2ban/filter.d/apache-high-volume.conf /etc/fail2ban/filter.d/apache-ua-keywords.conf /etc/fail2ban/filter.d/exim-dovecot-auth.conf; do
    [ -f "$f" ] && cp -a "$f" "$BKP/filter.d/"
 done
-for f in /etc/fail2ban/jail.d/wordpress-wp-login.conf /etc/fail2ban/jail.d/apache-high-volume.conf /etc/fail2ban/jail.d/apache-ua-keywords.conf /etc/fail2ban/jail.d/98-domlog-backend.conf; do
+for f in /etc/fail2ban/jail.d/wordpress-wp-login.conf /etc/fail2ban/jail.d/apache-high-volume.conf /etc/fail2ban/jail.d/apache-ua-keywords.conf /etc/fail2ban/jail.d/98-domlog-backend.conf /etc/fail2ban/jail.d/exim-dovecot-auth.conf; do
    [ -f "$f" ] && cp -a "$f" "$BKP/jail.d/"
 done
 # Also back up any legacy per-keyword UA jails before migration

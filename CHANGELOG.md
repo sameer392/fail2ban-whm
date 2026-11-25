@@ -1,5 +1,17 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- **Exim/Dovecot mail login brute-force jail** (`exim-dovecot-auth`): reads `/var/log/exim_mainlog` and bans source IPs with 5 failed Dovecot logins (SMTP AUTH, IMAP, POP3) within 10 minutes for 1 hour. Protects against credential-guessing campaigns on mail accounts, which CSF's built-in SMTP AUTH detection was not catching on cPanel servers using Dovecot.
+
+### Upgrade notes
+1. Update via WHM → Fail2Ban Manager → Update, or `/usr/share/fail2ban/scripts/update-from-github.sh`.
+2. Confirm the jail is active: `fail2ban-client status exim-dovecot-auth`.
+3. Trusted IPs that must never be banned go in `ignoreip` in `/etc/fail2ban/jail.d/exim-dovecot-auth.conf`. Note `update-whitelist.sh` does not apply to this jail, and an update overwrites the file, so re-check after updating.
+4. fail2ban was previously stopped on some servers. `install.sh` / `update.sh` enable and restart it, which also starts the existing UA and wp-login jails.
+
+
 ## [1.0.8] - 2026-09-11
 
 ### Fixed
