@@ -110,6 +110,8 @@ cp -f "$CONFIG_DIR/jail.d/"*.conf /etc/fail2ban/jail.d/
 [ -f "$CONFIG_DIR/fail2ban.d/loglevel-verbose.conf" ] && cp -f "$CONFIG_DIR/fail2ban.d/loglevel-verbose.conf" /etc/fail2ban/fail2ban.d/
 mkdir -p /etc/fail2ban/scripts
 [ -f "$CONFIG_DIR/scripts/csf-ban.sh" ] && cp -f "$CONFIG_DIR/scripts/csf-ban.sh" /etc/fail2ban/scripts/ && chmod +x /etc/fail2ban/scripts/csf-ban.sh
+[ -f "$CONFIG_DIR/scripts/f2b-ipset.sh" ] && cp -f "$CONFIG_DIR/scripts/f2b-ipset.sh" /etc/fail2ban/scripts/ && chmod +x /etc/fail2ban/scripts/f2b-ipset.sh
+[ -f "$CONFIG_DIR/scripts/csf-unban.sh" ] && cp -f "$CONFIG_DIR/scripts/csf-unban.sh" /etc/fail2ban/scripts/ && chmod +x /etc/fail2ban/scripts/csf-unban.sh
 [ -f "$CONFIG_DIR/scripts/cms-allow.sh" ] && cp -f "$CONFIG_DIR/scripts/cms-allow.sh" /etc/fail2ban/scripts/ && chmod +x /etc/fail2ban/scripts/cms-allow.sh
 [ -f "$CONFIG_DIR/scripts/apply-ipv6-mode.sh" ] && cp -f "$CONFIG_DIR/scripts/apply-ipv6-mode.sh" /etc/fail2ban/scripts/ && chmod +x /etc/fail2ban/scripts/apply-ipv6-mode.sh
 [ -x /etc/fail2ban/scripts/apply-ipv6-mode.sh ] && /etc/fail2ban/scripts/apply-ipv6-mode.sh || true

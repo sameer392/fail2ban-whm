@@ -19,6 +19,8 @@ F2B_JAILS=(
 F2B_ACTIONS=(
    /etc/fail2ban/action.d/csf-domain.conf
    /etc/fail2ban/scripts/csf-ban.sh
+   /etc/fail2ban/scripts/csf-unban.sh
+   /etc/fail2ban/scripts/f2b-ipset.sh
    /etc/fail2ban/scripts/cms-allow.sh
    /etc/fail2ban/conf.d/whitelist-countries.conf
    /etc/fail2ban/conf.d/blocklist-organizations.conf

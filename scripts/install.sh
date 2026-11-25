@@ -94,6 +94,8 @@ cp -f "$CONFIG_DIR/jail.d/"*.conf /etc/fail2ban/jail.d/
 [ -f "$CONFIG_DIR/fail2ban.d/loglevel-verbose.conf" ] && cp -f "$CONFIG_DIR/fail2ban.d/loglevel-verbose.conf" /etc/fail2ban/fail2ban.d/
 mkdir -p /etc/fail2ban/scripts
 [ -f "$CONFIG_DIR/scripts/csf-ban.sh" ] && cp -f "$CONFIG_DIR/scripts/csf-ban.sh" /etc/fail2ban/scripts/ && chmod +x /etc/fail2ban/scripts/csf-ban.sh
+[ -f "$CONFIG_DIR/scripts/f2b-ipset.sh" ] && cp -f "$CONFIG_DIR/scripts/f2b-ipset.sh" /etc/fail2ban/scripts/ && chmod +x /etc/fail2ban/scripts/f2b-ipset.sh
+[ -f "$CONFIG_DIR/scripts/csf-unban.sh" ] && cp -f "$CONFIG_DIR/scripts/csf-unban.sh" /etc/fail2ban/scripts/ && chmod +x /etc/fail2ban/scripts/csf-unban.sh
 [ -f "$CONFIG_DIR/scripts/cms-allow.sh" ] && cp -f "$CONFIG_DIR/scripts/cms-allow.sh" /etc/fail2ban/scripts/ && chmod +x /etc/fail2ban/scripts/cms-allow.sh
 mkdir -p /etc/fail2ban/conf.d
 # User configs (conf.d): copy only if not exists - preserve user settings across updates
@@ -130,6 +132,11 @@ if ! command -v mmdblookup &>/dev/null; then
    command -v mmdblookup &>/dev/null && echo "      libmaxminddb installed."
 else
    echo "      libmaxminddb already installed."
+fi
+
+# ipset: fast ban set used by csf-ban.sh (see scripts/f2b-ipset.sh)
+if ! command -v ipset &>/dev/null; then
+   if command -v dnf &>/dev/null; then dnf install -y ipset || echo "      Warning: install ipset failed; bans fall back to csf -d only."; elif command -v yum &>/dev/null; then yum install -y ipset || echo "      Warning: install ipset failed; bans fall back to csf -d only."; fi
 fi
 
 # 4. Setup IP2Location (country lookup for whitelist-countries)

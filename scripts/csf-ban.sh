@@ -14,6 +14,7 @@ BLOCKLIST_CONFIG="/etc/fail2ban/conf.d/blocklist-organizations.conf"
 DOMLOGS="${DOMLOGS:-/usr/local/apache/domlogs}"
 
 [ -z "$IP" ] || [ -z "$JAIL" ] && exit 1
+[ -f "${SCRIPT_DIR}/f2b-ipset.sh" ] && . "${SCRIPT_DIR}/f2b-ipset.sh"
 
 # Skip private/local IPv4
 [[ "$IP" =~ ^(127\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.) ]] && exit 0
@@ -144,6 +145,8 @@ else
 fi
 
 COMMENT=$(echo "$COMMENT" | head -c 200)
+# Block at once via ipset; CSF call below is only for its deny list / WHM view
+f2b_ipset_add "$IP"
 /usr/sbin/csf -d "$IP" "$COMMENT"
 
 # Optional: send email alert on ban (SMTP)

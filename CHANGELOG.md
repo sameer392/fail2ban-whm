@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Performance
+- Bans are applied to an `ipset` set (`f2b-bans`) with one iptables DROP rule, so a ban takes effect immediately instead of waiting on `csf -d` (which rebuilds the CSF firewall on every call). CSF's deny list is still updated for WHM and `csf -g`.
+- Unbans go through the new `csf-unban.sh`, which removes the IP from the set as well as CSF.
+- After a reboot, `f2b-ipset.sh restore` (run as the action's `actionstart`) reloads Fail2Ban bans from `csf.deny`.
+- The installer installs `ipset` if it's missing.
+
 ### Added
 - **Exim/Dovecot mail login brute-force jail** (`exim-dovecot-auth`): reads `/var/log/exim_mainlog` and bans source IPs with 5 failed Dovecot logins (SMTP AUTH, IMAP, POP3) within 10 minutes for 1 hour. Protects against credential-guessing campaigns on mail accounts, which CSF's built-in SMTP AUTH detection was not catching on cPanel servers using Dovecot.
 
