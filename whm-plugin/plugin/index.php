@@ -665,7 +665,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action) {
         $orgs = trim(preg_replace('/[\r\n]+/', ',', $_POST['blocked_organizations'] ?? ''));
         $threshold = max(0, min(20, (int)($_POST['multi_domain_threshold'] ?? 0)));
         $content = "# Blacklisted organizations - IPs from these orgs/ISPs are always banned\n";
-        $content .= "# Comma-separated, case-insensitive. Examples: Microsoft, DigitalOcean, Amazon\nBLOCKED_ORGANIZATIONS=" . preg_replace('/[^a-zA-Z0-9,\s.&-]/', '', $orgs) . "\n\n";
+        $content .= "# Comma-separated, case-insensitive. Examples: Microsoft, DigitalOcean, Amazon\nBLOCKED_ORGANIZATIONS='" . preg_replace('/[^a-zA-Z0-9,\s.&-]/', '', $orgs) . "'\n\n";
         $content .= "# Multi-domain abuse: if IP from whitelisted country has recent non-CMS (scanner) hits on this many domains, ban anyway\nMULTI_DOMAIN_ABUSE_THRESHOLD=" . $threshold . "\n";
         $dir = dirname($conf);
         if (!is_dir($dir)) @mkdir($dir, 0755, true);
@@ -1042,7 +1042,7 @@ $blocked_organizations = '';
 $multi_domain_threshold = 3;
 if (file_exists($blocklist_conf) && is_readable($blocklist_conf)) {
     $bc = file_get_contents($blocklist_conf);
-    if (preg_match('/BLOCKED_ORGANIZATIONS=(.*)$/m', $bc, $m)) $blocked_organizations = trim($m[1]);
+    if (preg_match('/BLOCKED_ORGANIZATIONS=(.*)$/m', $bc, $m)) $blocked_organizations = trim(trim($m[1]), "'\"");
     if (preg_match('/MULTI_DOMAIN_ABUSE_THRESHOLD=\s*(\d+)/', $bc, $m)) $multi_domain_threshold = max(0, min(20, (int)$m[1]));
 }
 $cms_allow_conf = '/etc/fail2ban/conf.d/cms-allow.conf';
