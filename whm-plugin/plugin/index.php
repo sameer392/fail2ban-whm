@@ -230,6 +230,7 @@ function get_ip_country($ip, &$cache = []) {
 }
 
 function get_affected_domains($ip, $jail, &$cache = []) {
+    if (!filter_var($ip, FILTER_VALIDATE_IP)) return '';
     $key = $ip . ':' . $jail;
     if (isset($cache[$key])) return $cache[$key];
     $domains = '';
@@ -243,7 +244,8 @@ function get_affected_domains($ip, $jail, &$cache = []) {
     }
     if ($domains === '' && is_dir('/usr/local/apache/domlogs')) {
         $files = [];
-        @exec("timeout 2 grep -lE '^" . preg_quote($ip, '/') . " ' /usr/local/apache/domlogs/*/* 2>/dev/null", $files);
+        // $ip is a validated IP (dots escaped for grep -E); escapeshellarg keeps the shell out of it
+        @exec("timeout 2 grep -lE " . escapeshellarg('^' . str_replace('.', '\\.', $ip) . ' ') . " /usr/local/apache/domlogs/*/* 2>/dev/null", $files);
         $doms = [];
         foreach ($files as $f) {
             $doms[] = preg_replace('/-ssl_log$/', '', basename($f));
@@ -273,15 +275,34 @@ function format_remaining_ban($seconds) {
     return implode(' ', $parts);
 }
 
+// Runs one query against the fail2ban ban database using bound parameters (no string-built SQL).
+// Returns ['rows' => [...], 'changes' => n], where each row is its columns joined with '|'
+// (the shape the callers parse), or null if the database is missing or the query fails.
+function f2b_db_query($sql, $params = []) {
+    $db = '/var/lib/fail2ban/fail2ban.sqlite3';
+    if (!file_exists($db)) return null;
+    try {
+        $pdo = new PDO('sqlite:' . $db, null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+        $rows = [];
+        if ($stmt->columnCount() > 0) {
+            foreach ($stmt->fetchAll(PDO::FETCH_NUM) as $r) {
+                $rows[] = implode('|', array_map('strval', $r));
+            }
+        }
+        return ['rows' => $rows, 'changes' => $stmt->rowCount()];
+    } catch (PDOException $e) {
+        return null;
+    }
+}
+
 function get_ban_times($jail) {
     $times = [];
-    $db = '/var/lib/fail2ban/fail2ban.sqlite3';
-    if (!file_exists($db) || !is_readable($db)) return $times;
     $jail_esc = preg_replace('/[^a-zA-Z0-9_-]/', '', $jail);
-    $out = [];
-    exec("sqlite3 -separator '|' " . escapeshellarg($db) . " \"SELECT ip, datetime(timeofban, 'unixepoch', 'localtime') FROM bips WHERE jail='" . $jail_esc . "'\" 2>/dev/null", $out, $ret);
-    if ($ret !== 0) return $times;
-    foreach ($out as $line) {
+    $res = f2b_db_query("SELECT ip, datetime(timeofban, 'unixepoch', 'localtime') FROM bips WHERE jail = ?", [$jail_esc]);
+    if ($res === null) return $times;
+    foreach ($res['rows'] as $line) {
         $p = explode('|', $line, 2);
         if (count($p) === 2) $times[trim($p[0])] = trim($p[1]);
     }
@@ -290,13 +311,10 @@ function get_ban_times($jail) {
 
 function get_ban_epochs($jail) {
     $epochs = [];
-    $db = '/var/lib/fail2ban/fail2ban.sqlite3';
-    if (!file_exists($db) || !is_readable($db)) return $epochs;
     $jail_esc = preg_replace('/[^a-zA-Z0-9_-]/', '', $jail);
-    $out = [];
-    exec("sqlite3 -separator '|' " . escapeshellarg($db) . " \"SELECT ip, timeofban FROM bips WHERE jail='" . $jail_esc . "'\" 2>/dev/null", $out, $ret);
-    if ($ret !== 0) return $epochs;
-    foreach ($out as $line) {
+    $res = f2b_db_query("SELECT ip, timeofban FROM bips WHERE jail = ?", [$jail_esc]);
+    if ($res === null) return $epochs;
+    foreach ($res['rows'] as $line) {
         $p = explode('|', $line, 2);
         if (count($p) === 2) $epochs[trim($p[0])] = (int)trim($p[1]);
     }
@@ -313,22 +331,26 @@ function get_banned_ips_merged($jails, $jail_filter, $page, $per_page, $search, 
     $limit = max(1, min(50, (int)$per_page));
     $rows = [];
 
-    if (file_exists($db) && is_readable($db)) {
-        $active_sql = " AND (timeofban + bantime) > cast(strftime('%s','now') as integer)";
-        $search_sql = ($search !== '') ? " AND ip LIKE '%" . str_replace("'", "''", $search) . "%'" : '';
-        $jail_list = array_map(function($j) { return "'" . preg_replace('/[^a-zA-Z0-9_-]/', '', $j) . "'"; }, $jails);
-        $jail_sql = implode(',', $jail_list);
-        $jail_filter_sql = '';
-        if ($jail_filter !== '' && $jail_filter !== 'all' && in_array($jail_filter, $jails)) {
-            $jail_filter_sql = " AND jail='" . preg_replace('/[^a-zA-Z0-9_-]/', '', $jail_filter) . "'";
+    $jail_names = array_values(array_filter(array_map(function($j) { return preg_replace('/[^a-zA-Z0-9_-]/', '', $j); }, $jails), 'strlen'));
+    if (!empty($jail_names)) {
+        $params = $jail_names;
+        $placeholders = implode(',', array_fill(0, count($jail_names), '?'));
+        $where = "jail IN ($placeholders) AND (timeofban + bantime) > cast(strftime('%s','now') as integer)";
+        if ($search !== '') {
+            $where .= " AND ip LIKE ?";
+            $params[] = '%' . $search . '%';
         }
-        $where = "jail IN ($jail_sql)" . $active_sql . $search_sql . $jail_filter_sql;
-        exec("sqlite3 -separator '|' " . escapeshellarg($db) . " \"SELECT COUNT(*) FROM bips WHERE " . $where . "\" 2>/dev/null", $cnt_out, $cnt_ret);
-        $total_out = ($cnt_ret === 0 && isset($cnt_out[0])) ? (int)$cnt_out[0] : 0;
+        if ($jail_filter !== '' && $jail_filter !== 'all' && in_array($jail_filter, $jails)) {
+            $where .= " AND jail = ?";
+            $params[] = preg_replace('/[^a-zA-Z0-9_-]/', '', $jail_filter);
+        }
+        $cnt = f2b_db_query("SELECT COUNT(*) FROM bips WHERE $where", $params);
+        $total_out = ($cnt !== null && isset($cnt['rows'][0])) ? (int)$cnt['rows'][0] : 0;
         if ($total_out > 0) {
-            $out = [];
-            exec("sqlite3 -separator '|' " . escapeshellarg($db) . " \"SELECT ip, jail, datetime(timeofban, 'unixepoch', 'localtime'), timeofban, bantime FROM bips WHERE " . $where . " ORDER BY timeofban DESC LIMIT " . (int)$limit . " OFFSET " . (int)$offset . "\" 2>/dev/null", $out, $ret);
-            if ($ret === 0) {
+            // LIMIT/OFFSET are integers cast above, so they are safe to place in the SQL text
+            $res = f2b_db_query("SELECT ip, jail, datetime(timeofban, 'unixepoch', 'localtime'), timeofban, bantime FROM bips WHERE $where ORDER BY timeofban DESC LIMIT " . (int)$limit . " OFFSET " . (int)$offset, $params);
+            if ($res !== null) {
+                $out = $res['rows'];
                 $now = time();
                 foreach ($out as $line) {
                     $p = explode('|', $line, 5);
@@ -373,16 +395,19 @@ function get_banned_ips_paginated($jail, $page, $per_page, $search, &$total_out)
     $limit = max(1, min(50, (int)$per_page));
     $rows = [];
 
-    if (file_exists($db) && is_readable($db)) {
-        $active_sql = " AND (timeofban + bantime) > cast(strftime('%s','now') as integer)";
-        $search_sql = ($search !== '') ? " AND ip LIKE '%" . str_replace("'", "''", $search) . "%'" : '';
-        $where = "jail='" . $jail_esc . "'" . $active_sql . $search_sql;
-        exec("sqlite3 -separator '|' " . escapeshellarg($db) . " \"SELECT COUNT(*) FROM bips WHERE " . $where . "\" 2>/dev/null", $cnt_out, $cnt_ret);
-        $total_out = ($cnt_ret === 0 && isset($cnt_out[0])) ? (int)$cnt_out[0] : 0;
+    if (file_exists($db)) {
+        $where = "jail = ? AND (timeofban + bantime) > cast(strftime('%s','now') as integer)";
+        $params = [$jail_esc];
+        if ($search !== '') {
+            $where .= " AND ip LIKE ?";
+            $params[] = '%' . $search . '%';
+        }
+        $cnt = f2b_db_query("SELECT COUNT(*) FROM bips WHERE $where", $params);
+        $total_out = ($cnt !== null && isset($cnt['rows'][0])) ? (int)$cnt['rows'][0] : 0;
         if ($total_out > 0) {
-            $out = [];
-            exec("sqlite3 -separator '|' " . escapeshellarg($db) . " \"SELECT ip, datetime(timeofban, 'unixepoch', 'localtime'), timeofban, bantime FROM bips WHERE " . $where . " ORDER BY timeofban DESC LIMIT " . (int)$limit . " OFFSET " . (int)$offset . "\" 2>/dev/null", $out, $ret);
-            if ($ret === 0) {
+            $res = f2b_db_query("SELECT ip, datetime(timeofban, 'unixepoch', 'localtime'), timeofban, bantime FROM bips WHERE $where ORDER BY timeofban DESC LIMIT " . (int)$limit . " OFFSET " . (int)$offset, $params);
+            $out = $res !== null ? $res['rows'] : [];
+            if ($res !== null) {
                 $now = time();
                 foreach ($out as $line) {
                     $p = explode('|', $line, 4);
@@ -434,9 +459,8 @@ function cleanup_expired_bips(&$deleted) {
     $db = '/var/lib/fail2ban/fail2ban.sqlite3';
     $deleted = 0;
     if (!file_exists($db) || !is_writable($db)) return false;
-    $out = [];
-    exec("sqlite3 " . escapeshellarg($db) . " \"DELETE FROM bips WHERE (timeofban + bantime) <= cast(strftime('%s','now') as integer); SELECT changes();\" 2>/dev/null", $out, $ret);
-    if ($ret === 0 && isset($out[0]) && is_numeric($out[0])) $deleted = (int)$out[0];
+    $res = f2b_db_query("DELETE FROM bips WHERE (timeofban + bantime) <= cast(strftime('%s','now') as integer)");
+    if ($res !== null) $deleted = (int)$res['changes'];
     return true;
 }
 
@@ -444,10 +468,9 @@ function get_bans_last_24h() {
     $db = '/var/lib/fail2ban/fail2ban.sqlite3';
     $result = [];
     if (!file_exists($db) || !is_readable($db)) return $result;
-    $out = [];
-    exec("sqlite3 -separator '|' " . escapeshellarg($db) . " \"SELECT jail, count(*) FROM bans WHERE timeofban > strftime('%s','now') - 86400 GROUP BY jail\" 2>/dev/null", $out, $ret);
-    if ($ret !== 0) return $result;
-    foreach ($out as $line) {
+    $res = f2b_db_query("SELECT jail, count(*) FROM bans WHERE timeofban > strftime('%s','now') - 86400 GROUP BY jail");
+    if ($res === null) return $result;
+    foreach ($res['rows'] as $line) {
         $p = explode('|', $line, 2);
         if (count($p) === 2) $result[trim($p[0])] = (int)trim($p[1]);
     }
@@ -1078,12 +1101,10 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'ip_log_details' && isset($_GET['i
     $matches = [];
     $failures = 0;
     if ($ip && $ajail && in_array($ajail, $jails)) {
-        $db = '/var/lib/fail2ban/fail2ban.sqlite3';
-        if (file_exists($db) && is_readable($db)) {
-            $out = [];
-            $ip_esc = str_replace("'", "''", $ip);
-            exec("sqlite3 " . escapeshellarg($db) . " \"SELECT data FROM bips WHERE jail='" . $ajail . "' AND ip='" . $ip_esc . "' LIMIT 1\" 2>/dev/null", $out, $ret);
-            if ($ret === 0 && !empty($out[0])) {
+        $res = f2b_db_query("SELECT data FROM bips WHERE jail = ? AND ip = ? LIMIT 1", [$ajail, $ip]);
+        if ($res !== null) {
+            $out = $res['rows'];
+            if (!empty($out[0])) {
                 $data = @json_decode($out[0], true);
                 if (is_array($data)) {
                     $matches = $data['matches'] ?? [];
@@ -1094,7 +1115,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'ip_log_details' && isset($_GET['i
         // Fallback: fail2ban stores only dbmaxmatches (default 5) per ban; grep domlogs for full count
         $need = max(0, min($failures, 100));
         if ($need > 0 && count($matches) < $need && is_dir('/usr/local/apache/domlogs')) {
-            $pattern = '^' . preg_quote($ip, '/') . ' ';
+            $pattern = '^' . str_replace('.', '\\.', $ip) . ' ';
             $domlog_matches = [];
             @exec("timeout 8 grep -hE " . escapeshellarg($pattern) . " /usr/local/apache/domlogs/*/* 2>/dev/null | tail -" . (int)$need, $domlog_matches, $gr);
             if (!empty($domlog_matches)) {

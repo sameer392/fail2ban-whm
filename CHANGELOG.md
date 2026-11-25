@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 ### Security
+- WHM plugin: all ban-database queries now use PDO with bound parameters (`f2b_db_query()`), instead of the `sqlite3` command line with SQL built from strings. Queries that run per IP are checked against a valid-IP filter first.
+- WHM plugin: the domlog grep for an IP is passed through `escapeshellarg`, and the IP is checked with `FILTER_VALIDATE_IP` before it reaches the shell.
 - WHM plugin: every POST request now needs a CSRF token (`csrf_token` form field or `X-CSRF-Token` header). Requests without a valid token are rejected before any action runs. This covers unban, whitelist and blacklist changes, jail settings, update and reload actions. The token is derived from a root-only key in `/var/lib/fail2ban-whm/csrf.key`, which is created on first use.
 - The two AJAX actions that change state (`clean_expired_bips` and `apply_blacklist_log`) were GET requests. They are now POST-only and send the token.
 
