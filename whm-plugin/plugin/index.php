@@ -1064,9 +1064,14 @@ foreach (get_useragent_keywords() as $ua) {
 }
 $jail_data = [];
 $jail_settings = [];
-foreach ($jails as $j) {
-    $jail_data[$j] = parse_jail_status($j);
-    $jail_settings[$j] = get_jail_settings($j);
+// The Banned IPs AJAX call only needs the jail list. Skip the per-jail status calls for it:
+// each one runs fail2ban-client and lists every banned IP, which made that call take seconds.
+$skip_jail_status = isset($_GET['ajax']) && $_GET['ajax'] === 'banned_ips';
+if (!$skip_jail_status) {
+    foreach ($jails as $j) {
+        $jail_data[$j] = parse_jail_status($j);
+        $jail_settings[$j] = get_jail_settings($j);
+    }
 }
 
 // AJAX: get log details for banned IP from bips.data (with domlog fallback when fewer matches than failures)
@@ -1262,7 +1267,11 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'banned_ips') {
 
 WHM::header('Fail2Ban Manager v' . FAIL2BAN_WHM_VERSION, 0, 0);
 
-exec('fail2ban-client status 2>/dev/null', $gen_out, $gen_ret);
+$gen_out = [];
+$gen_ret = 1;
+if (!$skip_jail_status) {
+    exec('fail2ban-client status 2>/dev/null', $gen_out, $gen_ret);
+}
 $general_status = $gen_ret === 0 ? implode("\n", array_slice($gen_out, 0, 15)) : 'fail2ban not running';
 
 ?>
