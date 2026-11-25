@@ -1,7 +1,7 @@
 #!/bin/bash
 # IP2Location LITE ASN (Organization) setup for fail2ban
 # Provides local org/AS lookup via mmdb. Requires IP2Location LITE account token.
-# Run as root. Optional - org display works without it (whois/ip-api.com fallback).
+# Run as root. Optional - org display works without it (org shown as unknown without it).
 
 set -e
 [ "$EUID" -ne 0 ] && { echo "Run as root"; exit 1; }

@@ -144,7 +144,7 @@ fi
 # 4. Setup IP2Location (country lookup for whitelist-countries)
 echo "[4/7] Setting up IP2Location LITE DB1..."
 if [ -f "$CONFIG_DIR/scripts/setup-ip2location.sh" ]; then
-   "$CONFIG_DIR/scripts/setup-ip2location.sh" || echo "      IP2Location setup skipped or failed; ip-api.com fallback will be used."
+   "$CONFIG_DIR/scripts/setup-ip2location.sh" || echo "      IP2Location setup skipped or failed; country and org checks will run without the local database (see UNKNOWN_COUNTRY_ACTION)."
 else
    echo "      setup-ip2location.sh not found; run manually if needed."
 fi

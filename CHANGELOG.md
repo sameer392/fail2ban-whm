@@ -3,6 +3,8 @@
 ## [Unreleased]
 
 ### Performance
+- Lookups are bounded and cached. The new `f2b-lookup.sh` reads country and organisation from the local IP2Location databases with a 5-second timeout, and caches the result per IP for 24 hours in `/var/cache/fail2ban-whm`. The worker prunes expired entries hourly. `csf -d` and `csf -dr` run with a 60-second timeout so a hung CSF call cannot block the queue.
+- The WHOIS fallback is removed. WHOIS has no timeout and could hang the ban queue.
 - Country and organisation checks use only the local IP2Location databases. The ip-api.com fallback is removed from `csf-ban-process.sh` and `cms-allow.sh`. `cms-allow.sh` runs as fail2ban's `ignorecommand` on every matching log line, so it made one network call per line; its free-tier rate limit also made lookups fail under attack.
 - **Behaviour change:** an IP that is not in the local database is now banned by default. Before, a failed lookup skipped the ban. To keep the old behaviour, set `UNKNOWN_COUNTRY_ACTION=skip` in `conf.d/whitelist-countries.conf`. Servers without the IP2Location database should set this to `skip` if they rely on the country whitelist.
 - Ban processing moved out of fail2ban's action thread. `csf-ban.sh` and `csf-unban.sh` now only append a line to a queue (`/var/spool/fail2ban-whm/queue`) and return. The new `f2b-ban-worker` systemd service applies the queue in the background (`csf-ban-process.sh` does the country/org check, domain comment, ipset block, CSF record and email). Previously each ban blocked detection of the other IPs while its lookups and `csf -d` ran.

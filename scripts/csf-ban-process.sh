@@ -34,6 +34,8 @@ fi
 
 # CMS / editor path allow list (WHM → Whitelists). Sourced for country-scoped patterns.
 [ -f "${SCRIPT_DIR}/cms-allow.sh" ] && . "${SCRIPT_DIR}/cms-allow.sh"
+# Lookups (cached, local-only) and f2b_timeout
+. "${SCRIPT_DIR}/f2b-lookup.sh"
 
 # Country whitelist applies ONLY to apache-high-volume; all other jails always ban
 [[ "$JAIL" == apache-high-volume ]] && SKIP_WHITELIST=0 || SKIP_WHITELIST=1
@@ -63,16 +65,9 @@ MULTI_DOMAIN_ABUSE_THRESHOLD=0
 # Check country and skip if whitelisted (with exceptions) - skip for apache-ua-* jails
 SKIP_BAN=0
 if [ "$SKIP_WHITELIST" != "1" ] && [ -n "$WHITELIST_COUNTRIES" ]; then
-    COUNTRY=""
-    # IP2Location LITE DB1 (country lookup via mmdblookup)
-    for db in /etc/fail2ban/GeoIP/IP2LOCATION-LITE-DB1.mmdb; do
-        if [ -f "$db" ] && command -v mmdblookup &>/dev/null; then
-            COUNTRY=$(mmdblookup -f "$db" -i "$IP" country iso_code 2>/dev/null | awk -F'"' '$2 ~ /^[A-Z]{2}$/ {print $2; exit}')
-            [ -n "$COUNTRY" ] && break
-        fi
-    done
-    # Local database only (no ip-api.com): a network lookup per ban stalls the queue,
-    # and its rate limit made lookups fail under attack.
+    # Local IP2Location databases only, bounded and cached (see f2b-lookup.sh)
+    f2b_lookup_ip "$IP"
+    COUNTRY="$F2B_COUNTRY"
     if [ -n "$COUNTRY" ]; then
         IS_WHITELISTED=0
         for c in $(echo "$WHITELIST_COUNTRIES" | tr ',' ' '); do
@@ -96,20 +91,9 @@ if [ "$SKIP_WHITELIST" != "1" ] && [ -n "$WHITELIST_COUNTRIES" ]; then
             fi
             # Exception 2: Blacklisted organization - ban Microsoft, DigitalOcean, etc.
             if [ "$SKIP_BAN" = "1" ] && [ -n "$BLOCKED_ORGANIZATIONS" ]; then
-                ORG=""
-                # Prefer local mmdb (IP2Location LITE ASN)
-                ASN_MMDB="/etc/fail2ban/GeoIP/IP2LOCATION-LITE-ASN.mmdb"
-                if [ -f "$ASN_MMDB" ] && command -v mmdblookup &>/dev/null; then
-                    for path in "as" "autonomous_system_organization" "organization"; do
-                        ORG=$(mmdblookup -f "$ASN_MMDB" -i "$IP" "$path" 2>/dev/null | grep -m1 'utf8_string' | sed 's/.*"\([^"]*\)".*/\1/')
-                        [ -n "$ORG" ] && [ "$ORG" != "-" ] && break
-                    done
-                fi
-                # Fallback: local whois
-                if [ -z "$ORG" ] && command -v whois &>/dev/null; then
-                    ORG_RAW=$(whois "$IP" 2>/dev/null)
-                    ORG=$(echo "$ORG_RAW" | grep -m1 -E '^OrgName:|^Organization:' | sed 's/^[^:]*:[ \t]*//' | sed 's/ ([A-Z0-9]*)$//' | tr -d '\n')
-                fi
+                # ORG comes from f2b_lookup_ip (local ASN database, cached). No WHOIS:
+                # it has no timeout and can hang the queue.
+                ORG="$F2B_ORG"
                 for bl in $(echo "$BLOCKED_ORGANIZATIONS" | tr ',' ' '); do
                     bl=$(echo "$bl" | tr -d ' ')
                     [ -z "$bl" ] && continue
@@ -139,7 +123,7 @@ fi
 COMMENT=$(echo "$COMMENT" | head -c 200)
 # Block at once via ipset; CSF call below is only for its deny list / WHM view
 f2b_ipset_add "$IP"
-/usr/sbin/csf -d "$IP" "$COMMENT"
+f2b_timeout 60 /usr/sbin/csf -d "$IP" "$COMMENT"
 
 # Optional: send email alert on ban (SMTP)
 EMAIL_CONF="${SCRIPT_DIR}/email-alerts.conf"

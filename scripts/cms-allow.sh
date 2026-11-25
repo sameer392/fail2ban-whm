@@ -21,7 +21,7 @@ cms_allow_country() {
     [ -z "$ip" ] && return 1
     db="/etc/fail2ban/GeoIP/IP2LOCATION-LITE-DB1.mmdb"
     if [ -f "$db" ] && command -v mmdblookup &>/dev/null; then
-        country=$(mmdblookup -f "$db" -i "$ip" country iso_code 2>/dev/null | awk -F'"' '$2 ~ /^[A-Z]{2}$/ {print $2; exit}')
+        country=$(timeout 5 mmdblookup -f "$db" -i "$ip" country iso_code 2>/dev/null | awk -F'"' '$2 ~ /^[A-Z]{2}$/ {print $2; exit}')
     fi
     # Local IP2Location database only: no network lookup here, because this runs on
     # every matching log line. Unknown country is printed as an empty string.
