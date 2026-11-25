@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Performance
+- Domain lookup for ban comments is batched. The worker scans the domlogs once per batch for all banned IPs (previously once per ban), and `csf-ban-process.sh` reads the result from that batch.
 - Lookups are bounded and cached. The new `f2b-lookup.sh` reads country and organisation from the local IP2Location databases with a 5-second timeout, and caches the result per IP for 24 hours in `/var/cache/fail2ban-whm`. The worker prunes expired entries hourly. `csf -d` and `csf -dr` run with a 60-second timeout so a hung CSF call cannot block the queue.
 - The WHOIS fallback is removed. WHOIS has no timeout and could hang the ban queue.
 - Country and organisation checks use only the local IP2Location databases. The ip-api.com fallback is removed from `csf-ban-process.sh` and `cms-allow.sh`. `cms-allow.sh` runs as fail2ban's `ignorecommand` on every matching log line, so it made one network call per line; its free-tier rate limit also made lookups fail under attack.

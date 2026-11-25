@@ -44,14 +44,17 @@ fi
 DOMAINS=""
 DOMAIN_COUNT=0
 SCANNER_DOMAIN_COUNT=0
-if [ -d "$DOMLOGS" ]; then
+if [ -n "$F2B_DOMAINS_MAP" ] && [ -f "$F2B_DOMAINS_MAP" ]; then
+    # Batch map written by f2b-ban-worker.sh (one domlog scan for the whole batch)
+    DOMAINS=$(awk -F'\t' -v ip="$IP" '$1 == ip {print $2}' "$F2B_DOMAINS_MAP" | sort -u | tr '\n' ',' | sed 's/,$//; s/,/, /g')
+elif [ -d "$DOMLOGS" ]; then
     IP_ESC=$(printf '%s' "$IP" | sed 's/[.[\*^$]/\\&/g')
     DOMAINS=$(grep -lE "^${IP_ESC} " "$DOMLOGS"/*/* 2>/dev/null | grep -vE 'bytes_log$|ftp_log$|placeholder' | while read -r f; do
         basename "$f" | sed 's/-ssl_log$//'
     done | sort -u | tr '\n' ',' | sed 's/,$//; s/,/, /g')
-    [ -n "$DOMAINS" ] && DOMAIN_COUNT=$(echo "$DOMAINS" | tr ',' '\n' | wc -l)
-    SCANNER_DOMAIN_COUNT=$DOMAIN_COUNT
 fi
+[ -n "$DOMAINS" ] && DOMAIN_COUNT=$(echo "$DOMAINS" | tr ',' '\n' | wc -l)
+SCANNER_DOMAIN_COUNT=$DOMAIN_COUNT
 
 # Load ignored countries
 WHITELIST_COUNTRIES=""
