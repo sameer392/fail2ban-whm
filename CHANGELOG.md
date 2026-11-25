@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [1.0.10] - 2026-11-26
 ### Security
 - `email-alerts.conf` (holds the SMTP password) is created owner-only, so it is never readable by others. Its path is now `/etc/fail2ban/conf.d/`, the same place the WHM plugin saves it. Before this, the ban script looked in a different folder, so alert emails were never sent from the saved settings. The ban script only loads the file if it is root-owned with mode 600. `install.sh` and `update.sh` enforce the same permissions on an existing file.
 - WHM plugin: all ban-database queries now use PDO with bound parameters (`f2b_db_query()`), instead of the `sqlite3` command line with SQL built from strings. Queries that run per IP are checked against a valid-IP filter first.
