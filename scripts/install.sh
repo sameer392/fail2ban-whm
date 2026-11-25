@@ -120,6 +120,18 @@ done
 [ -x /etc/fail2ban/scripts/generate-logpath.sh ] && /etc/fail2ban/scripts/generate-logpath.sh || true
 # Regenerate combined UA jail from conf.d/useragent-keywords.conf
 [ -x /etc/fail2ban/scripts/update-useragent-jails.sh ] && /etc/fail2ban/scripts/update-useragent-jails.sh || true
+# Per-server overrides: jail.local is created once and never overwritten by upgrades.
+# fail2ban reads it after jail.d/, so its values win over the repo defaults.
+if [ ! -f /etc/fail2ban/jail.local ]; then
+   cat > /etc/fail2ban/jail.local <<'JAILLOCAL'
+# Server-specific overrides for fail2ban jails. Upgrades never overwrite this file.
+# Example (only the keys you want to change):
+#
+# [apache-high-volume]
+# maxretry = 40
+JAILLOCAL
+   echo "      Created /etc/fail2ban/jail.local (empty overrides)."
+fi
 echo "      Config deployed."
 # 3. Install libmaxminddb (for IP2Location country lookup via mmdblookup)
 echo "[3/7] Installing libmaxminddb (if not installed)..."

@@ -58,6 +58,7 @@ for f in csf-ban.sh cms-allow.sh setup-ip2location.sh setup-ip2location-asn.sh u
 done
 [ -d /etc/fail2ban/conf.d ] && for f in /etc/fail2ban/conf.d/*.conf; do [ -f "$f" ] && cp -a "$f" "$BKP/conf.d/" 2>/dev/null || true; done
 [ -f /etc/fail2ban/jail.d/99-domlog-logpath.conf ] && cp -a /etc/fail2ban/jail.d/99-domlog-logpath.conf "$BKP/jail.d/" 2>/dev/null || true
+[ -f /etc/fail2ban/jail.local ] && cp -a /etc/fail2ban/jail.local "$BKP/" 2>/dev/null || true
 [ -f /etc/logrotate.d/fail2ban ] && cp -a /etc/logrotate.d/fail2ban "$BKP/logrotate.d/" 2>/dev/null || true
 echo "      Backup: $BKP"
 # Keep last 10 backups
@@ -135,6 +136,18 @@ for old in /etc/fail2ban/jail.d/apache-ua-*.conf /etc/fail2ban/filter.d/apache-u
    base=$(basename "$old" .conf)
    [ "$base" = "apache-ua-keywords" ] || rm -f "$old"
 done
+# Per-server overrides: jail.local is created once and never overwritten by upgrades.
+# fail2ban reads it after jail.d/, so its values win over the repo defaults.
+if [ ! -f /etc/fail2ban/jail.local ]; then
+   cat > /etc/fail2ban/jail.local <<'JAILLOCAL'
+# Server-specific overrides for fail2ban jails. Upgrades never overwrite this file.
+# Example (only the keys you want to change):
+#
+# [apache-high-volume]
+# maxretry = 40
+JAILLOCAL
+   echo "      Created /etc/fail2ban/jail.local (empty overrides)."
+fi
 echo "      Config deployed."
 
 echo "[3/5] Generating logpath + User-Agent jail..."

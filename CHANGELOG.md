@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+- `jail.local` is created once by `install.sh` / `update.sh` (empty) and is never overwritten. Put per-server values such as `maxretry` there. Upgrades copy `jail.d/*.conf` from the repo, so values edited in those files are reset on every update. `update.sh` backs up `jail.local` with the other jail files.
+- **Upgrade note:** servers that already tuned `apache-high-volume` or `wordpress-wp-login` in `jail.d/` must move those values into `jail.local` before the upgrade, or the upgrade resets them to the repo defaults.
+
 ## [1.0.9] - 2026-11-25
 
 ### Other
