@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.0.13] - 2026-11-26
+
+### Performance
+- The Banned IPs table no longer runs `fail2ban-client status` and the banned-IP list for every jail before it loads. Those calls ran on every page request, including the table's own AJAX request, and made it take seconds.
+
 ## [1.0.12] - 2026-11-26
 
 ### Fixed
