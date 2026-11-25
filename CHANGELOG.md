@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.0.14] - 2026-11-26
+
+### Fixed
+- The Unban button in the Banned IPs table failed with "Security token missing or invalid". The table is loaded by AJAX as HTML, and the CSRF token was not added to its forms. The token is now added to that table, and JSON responses are unchanged.
+
 ## [1.0.13] - 2026-11-26
 
 ### Performance
