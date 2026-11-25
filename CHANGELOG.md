@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.0.11] - 2026-11-26
+
+### Fixed
+- `f2b-lookup.sh` was not deployed by `install.sh` or `update.sh`, although `csf-ban-process.sh` and `f2b-ban-worker.sh` load it. Without it, bans were not recorded in CSF's deny list and the country/org lookup did not run. Upgrade to this version to fix it; check with `ls /etc/fail2ban/scripts/f2b-lookup.sh`.
+
 ## [1.0.10] - 2026-11-26
 ### Security
 - `email-alerts.conf` (holds the SMTP password) is created owner-only, so it is never readable by others. Its path is now `/etc/fail2ban/conf.d/`, the same place the WHM plugin saves it. Before this, the ban script looked in a different folder, so alert emails were never sent from the saved settings. The ban script only loads the file if it is root-owned with mode 600. `install.sh` and `update.sh` enforce the same permissions on an existing file.
