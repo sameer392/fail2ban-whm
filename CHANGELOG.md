@@ -1,6 +1,9 @@
 # Changelog
 
-## [Unreleased]
+## [1.0.9] - 2026-11-25
+
+### Other
+- New WHM plugin icon (firewall wall with a ban badge).
 
 ### Performance
 - Domain lookup for ban comments is batched. The worker scans the domlogs once per batch for all banned IPs (previously once per ban), and `csf-ban-process.sh` reads the result from that batch.
