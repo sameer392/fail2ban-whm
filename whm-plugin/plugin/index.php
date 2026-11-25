@@ -592,8 +592,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Inject the token into forms on normal page loads only
-if (!isset($_SERVER['HTTP_X_REQUESTED_WITH'])) {
+// Inject the token into HTML forms: normal page loads, and the Banned IPs table (loaded by AJAX as HTML).
+// JSON AJAX responses are left alone.
+$is_banned_fragment = isset($_GET['ajax']) && $_GET['ajax'] === 'banned_ips';
+if (!isset($_SERVER['HTTP_X_REQUESTED_WITH']) || $is_banned_fragment) {
     ob_start('f2b_csrf_inject');
 }
 
